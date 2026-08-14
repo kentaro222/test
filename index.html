@@ -94,7 +94,7 @@
 
     <p class="note">
       音声データ自体はサーバーへアップロードされず、このブラウザ内で処理されます。
-      初回のみFFmpeg WebAssembly本体をCDNから読み込みます（約30MB）。
+      初回のみFFmpeg WebAssembly本体とWorkerをCDNから読み込みます（本体は約30MB）。
       大きなファイルではブラウザのメモリを多く使用します。
     </p>
   </section>
@@ -166,7 +166,12 @@
     });
 
     const baseURL="https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
+    const classWorkerSource="https://esm.sh/@ffmpeg/ffmpeg@0.12.15/es2022/worker.js";
+
+    // GitHub Pagesなど別オリジンのCDNからWorkerを直接生成すると
+    // SecurityErrorになるため、WorkerスクリプトもBlob URL化する。
     await ffmpeg.load({
+      classWorkerURL: await toBlobURL(classWorkerSource, "text/javascript"),
       coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
       wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm")
     });

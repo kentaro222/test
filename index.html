@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Audio Loudness Normalizer</title>
+  <style>
+    :root{
+      color-scheme: dark;
+      --bg:#0d0f14; --panel:#171a22; --line:#2b3040;
+      --text:#f4f6fb; --muted:#aab1c3; --accent:#7ea7ff; --ok:#7fdaa4; --err:#ff8f8f;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; min-height:100vh; background:var(--bg); color:var(--text);
+      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif;
+      display:grid; place-items:center; padding:24px;
+    }
+    .app{width:min(760px,100%)}
+    h1{font-size:clamp(24px,5vw,40px); margin:0 0 8px}
+    .lead{color:var(--muted); margin:0 0 22px}
+    .panel{
+      background:var(--panel); border:1px solid var(--line);
+      border-radius:18px; padding:20px; box-shadow:0 18px 55px rgba(0,0,0,.25);
+    }
+    .drop{
+      border:2px dashed #46506a; border-radius:16px; min-height:190px;
+      display:grid; place-items:center; text-align:center; padding:24px; cursor:pointer;
+      transition:.15s ease; outline:none;
+    }
+    .drop.drag{border-color:var(--accent); background:#182036}
+    .drop strong{font-size:18px; display:block; margin-bottom:6px}
+    .muted{color:var(--muted); font-size:14px}
+    input[type=file]{display:none}
+    .settings{
+      display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:16px 0;
+    }
+    .setting{border:1px solid var(--line); border-radius:12px; padding:12px}
+    .setting b{display:block; font-size:16px}
+    .setting span{font-size:12px;color:var(--muted)}
+    button,.download{
+      width:100%; border:0; border-radius:12px; padding:14px 16px;
+      font:inherit; font-weight:700; cursor:pointer; text-align:center;
+      text-decoration:none; display:block;
+    }
+    button{background:var(--accent); color:#09101f}
+    button:disabled{opacity:.45; cursor:not-allowed}
+    .download{background:var(--ok); color:#092114; margin-top:10px}
+    .progress-wrap{margin-top:16px}
+    progress{width:100%; height:10px; accent-color:var(--accent)}
+    .status{margin-top:8px; font-size:14px; min-height:1.5em; color:var(--muted)}
+    .status.ok{color:var(--ok)} .status.err{color:var(--err)}
+    .fileinfo{margin-top:12px; padding:10px 12px; background:#11141b; border-radius:10px; display:none}
+    .note{font-size:12px;color:var(--muted);margin:14px 2px 0;line-height:1.6}
+    details{margin-top:14px}
+    pre{white-space:pre-wrap;max-height:190px;overflow:auto;background:#0b0d12;padding:10px;border-radius:8px;font-size:11px;color:#c7ccda}
+    @media(max-width:580px){.settings{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<main class="app">
+  <h1>Audio Normalizer</h1>
+  <p class="lead">音声を -14 LUFS に整え、128 kbps MP3として書き出します。</p>
+
+  <section class="panel">
+    <label class="drop" id="drop" tabindex="0">
+      <div>
+        <strong>音声ファイルをここにドロップ</strong>
+        <div class="muted">またはクリックしてファイルを選択</div>
+      </div>
+      <input id="file" type="file" accept="audio/*,.wav,.flac,.m4a,.aac,.ogg,.opus,.mp3,.webm,.mp4" />
+    </label>
+
+    <div class="fileinfo" id="fileinfo"></div>
+
+    <div class="settings">
+      <div class="setting"><span>Target Loudness</span><b>-14 LUFS</b></div>
+      <div class="setting"><span>True Peak</span><b>-1.5 dBTP</b></div>
+      <div class="setting"><span>MP3 Bitrate</span><b>128 kbps</b></div>
+    </div>
+
+    <button id="convert" disabled>MP3に変換</button>
+    <a id="download" class="download" hidden>変換済みMP3を保存</a>
+
+    <div class="progress-wrap">
+      <progress id="progress" max="100" value="0"></progress>
+      <div id="status" class="status">音声ファイルを選択してください。</div>
+    </div>
+
+    <details>
+      <summary class="muted">処理ログ</summary>
+      <pre id="log"></pre>
+    </details>
+
+    <p class="note">
+      音声データ自体はサーバーへアップロードされず、このブラウザ内で処理されます。
+      初回のみFFmpeg WebAssembly本体をCDNから読み込みます（約30MB）。
+      大きなファイルではブラウザのメモリを多く使用します。
+    </p>
+  </section>
+</main>
+
+<script type="module">
+  import { FFmpeg } from "https://esm.sh/@ffmpeg/ffmpeg@0.12.15";
+  import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
+
+  const $ = s => document.querySelector(s);
+  const fileEl = $("#file"), drop = $("#drop"), convertBtn = $("#convert");
+  const progress = $("#progress"), statusEl = $("#status"), logEl = $("#log");
+  const download = $("#download"), fileinfo = $("#fileinfo");
+
+  let inputFile = null;
+  let ffmpeg = null;
+  let loaded = false;
+  let logs = [];
+  let resultURL = null;
+
+  function humanSize(bytes){
+    const u=["B","KB","MB","GB"]; let i=0,n=bytes;
+    while(n>=1024 && i<u.length-1){n/=1024;i++}
+    return `${n.toFixed(i?1:0)} ${u[i]}`;
+  }
+
+  function setStatus(text, cls=""){
+    statusEl.textContent=text;
+    statusEl.className="status"+(cls?` ${cls}`:"");
+  }
+
+  function showFile(file){
+    inputFile=file;
+    fileinfo.style.display="block";
+    fileinfo.innerHTML=`<b>${escapeHtml(file.name)}</b><br><span class="muted">${humanSize(file.size)} · ${escapeHtml(file.type || "形式不明")}</span>`;
+    convertBtn.disabled=false;
+    download.hidden=true;
+    progress.value=0;
+    setStatus("準備完了。");
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  fileEl.addEventListener("change",()=>fileEl.files[0] && showFile(fileEl.files[0]));
+  ["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("drag")}));
+  ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("drag")}));
+  drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0]; if(f) showFile(f)});
+  drop.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();fileEl.click()}});
+
+  async function loadFFmpeg(){
+    if(loaded) return;
+    setStatus("FFmpegを読み込んでいます…");
+    progress.value=5;
+
+    ffmpeg = new FFmpeg();
+    ffmpeg.on("log", ({message})=>{
+      logs.push(message);
+      if(logs.length>250) logs.shift();
+      logEl.textContent=logs.join("\n");
+      logEl.scrollTop=logEl.scrollHeight;
+    });
+    ffmpeg.on("progress", ({progress:p})=>{
+      // Each pass has its own progress. The main stages set the base manually.
+      const current = Number.isFinite(p) ? Math.max(0,Math.min(1,p)) : 0;
+      if(progress.dataset.stage==="analyze") progress.value=15+current*30;
+      if(progress.dataset.stage==="encode") progress.value=50+current*45;
+    });
+
+    const baseURL="https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
+    await ffmpeg.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm")
+    });
+    loaded=true;
+    progress.value=12;
+  }
+
+  function parseLoudnormJSON(text){
+    // loudnorm JSON is emitted in the log. Find the last JSON object containing input_i.
+    const matches=[...text.matchAll(/\{\s*"input_i"[\s\S]*?"target_offset"\s*:\s*"[^"]+"\s*\}/g)];
+    if(!matches.length) throw new Error("ラウドネス解析結果を取得できませんでした。");
+    return JSON.parse(matches[matches.length-1][0]);
+  }
+
+  function safeNum(v,name){
+    const n=Number(v);
+    if(!Number.isFinite(n)) throw new Error(`${name} の解析値が不正です。`);
+    return n;
+  }
+
+  convertBtn.addEventListener("click", async ()=>{
+    if(!inputFile) return;
+    convertBtn.disabled=true;
+    download.hidden=true;
+    logs=[];
+    logEl.textContent="";
+    if(resultURL){URL.revokeObjectURL(resultURL);resultURL=null}
+
+    const ext=(inputFile.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase() || "bin";
+    const inName=`input.${ext}`;
+    const outName="normalized.mp3";
+
+    try{
+      await loadFFmpeg();
+      setStatus("ファイルを読み込んでいます…");
+      progress.value=14;
+      await ffmpeg.writeFile(inName, await fetchFile(inputFile));
+
+      // PASS 1: measure loudness
+      progress.dataset.stage="analyze";
+      setStatus("1/2 ラウドネスを解析しています…");
+      logs=[];
+      await ffmpeg.exec([
+        "-hide_banner","-i",inName,
+        "-vn",
+        "-af","loudnorm=I=-14:TP=-1.5:LRA=11:print_format=json",
+        "-f","null","-"
+      ]);
+
+      const measured=parseLoudnormJSON(logs.join("\n"));
+      const input_i=safeNum(measured.input_i,"input_i");
+      const input_tp=safeNum(measured.input_tp,"input_tp");
+      const input_lra=safeNum(measured.input_lra,"input_lra");
+      const input_thresh=safeNum(measured.input_thresh,"input_thresh");
+      const target_offset=safeNum(measured.target_offset,"target_offset");
+
+      // PASS 2: normalize with measured values, encode MP3
+      progress.dataset.stage="encode";
+      progress.value=50;
+      setStatus("2/2 -14 LUFSへ補正してMP3を書き出しています…");
+
+      const filter=[
+        "loudnorm=I=-14",
+        "TP=-1.5",
+        "LRA=11",
+        `measured_I=${input_i}`,
+        `measured_TP=${input_tp}`,
+        `measured_LRA=${input_lra}`,
+        `measured_thresh=${input_thresh}`,
+        `offset=${target_offset}`,
+        "linear=true",
+        "print_format=summary"
+      ].join(":");
+
+      await ffmpeg.exec([
+        "-hide_banner","-y","-i",inName,
+        "-vn",
+        "-af",filter,
+        "-c:a","libmp3lame",
+        "-b:a","128k",
+        "-ar","44100",
+        outName
+      ]);
+
+      const data=await ffmpeg.readFile(outName);
+      const blob=new Blob([data.buffer],{type:"audio/mpeg"});
+      resultURL=URL.createObjectURL(blob);
+
+      const base=inputFile.name.replace(/\.[^.]+$/,"");
+      download.href=resultURL;
+      download.download=`${base}_-14LUFS.mp3`;
+      download.hidden=false;
+
+      progress.value=100;
+      setStatus(`完了：-14 LUFS / -1.5 dBTP / 128 kbps MP3`, "ok");
+
+      // cleanup wasm FS
+      try{await ffmpeg.deleteFile(inName)}catch{}
+      try{await ffmpeg.deleteFile(outName)}catch{}
+    }catch(err){
+      console.error(err);
+      setStatus(`エラー：${err?.message || err}`, "err");
+      progress.value=0;
+    }finally{
+      progress.dataset.stage="";
+      convertBtn.disabled=false;
+    }
+  });
+</script>
+</body>
+</html>

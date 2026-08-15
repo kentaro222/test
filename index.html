@@ -145,6 +145,8 @@
       </div>
     </div>
 
+    <div id="metaStatus" class="muted" style="margin:-6px 0 14px">元ファイルのタグがあれば自動で読み込みます。</div>
+
     <button id="convert" disabled>MP3に変換</button>
     <a id="download" class="download" hidden style="display:none">変換済みMP3を保存</a>
 
@@ -175,7 +177,7 @@
   const outnameEl = $("#outname"), titleEl = $("#title"), artistEl = $("#artist");
   const albumEl = $("#album"), albumArtistEl = $("#albumArtist"), genreEl = $("#genre");
   const yearEl = $("#year"), trackEl = $("#track"), commentEl = $("#comment");
-  const bitrateEl = $("#bitrate");
+  const bitrateEl = $("#bitrate"), metaStatusEl = $("#metaStatus");
 
   let inputFile = null;
   let ffmpeg = null;
@@ -195,17 +197,108 @@
     statusEl.className="status"+(cls?` ${cls}`:"");
   }
 
+
+  function parseInputMetadata(logText){
+    const tags={};
+    const lines=String(logText || "").split(/\r?\n/);
+    let inInput=false;
+    let inMetadata=false;
+
+    for(const raw of lines){
+      const line=raw.replace(/\x1b\[[0-9;]*m/g,"");
+      if(/^Input #\d+/.test(line.trim())){
+        inInput=true;
+        inMetadata=false;
+        continue;
+      }
+      if(!inInput) continue;
+      if(line.trim()==="Metadata:"){
+        inMetadata=true;
+        continue;
+      }
+      if(inMetadata){
+        const t=line.trim();
+        if(/^Duration:/.test(t) || /^Stream #/.test(t) || /^Side data:/.test(t)) break;
+        const m=line.match(/^\s*([^:]+?)\s*:\s*(.*)$/);
+        if(m){
+          const key=m[1].trim().toLowerCase();
+          const val=m[2].trim();
+          if(val) tags[key]=val;
+        }
+      }
+    }
+    return tags;
+  }
+
+  function applySourceMetadata(tags){
+    const get=(...keys)=>{
+      for(const k of keys){
+        if(tags[k] != null && String(tags[k]).trim()) return String(tags[k]).trim();
+      }
+      return "";
+    };
+
+    titleEl.value=get("title");
+    artistEl.value=get("artist");
+    albumEl.value=get("album");
+    albumArtistEl.value=get("album_artist","album artist","albumartist");
+    genreEl.value=get("genre");
+    yearEl.value=get("date","year");
+    trackEl.value=get("track","tracknumber","track number");
+    commentEl.value=get("comment","description");
+
+    return [titleEl.value,artistEl.value,albumEl.value,albumArtistEl.value,genreEl.value,yearEl.value,trackEl.value,commentEl.value].filter(Boolean).length;
+  }
+
+  async function readSourceMetadata(file){
+    metaStatusEl.textContent="元ファイルのタグを読み込んでいます…";
+    try{
+      await loadFFmpeg();
+      const ext=(file.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase() || "bin";
+      const probeName=`metadata_input.${ext}`;
+      logs=[];
+      logEl.textContent="";
+      await ffmpeg.writeFile(probeName, new Uint8Array(await file.arrayBuffer()));
+      await ffmpeg.exec([
+        "-hide_banner","-i",probeName,
+        "-map","0:a:0?",
+        "-frames:a","1",
+        "-f","null","-"
+      ]);
+      const tags=parseInputMetadata(logs.join("\n"));
+      const count=applySourceMetadata(tags);
+      try{await ffmpeg.deleteFile(probeName)}catch{}
+      metaStatusEl.textContent=count
+        ? `元ファイルから ${count} 項目のタグを読み込みました。`
+        : "元ファイルに読み込めるタグは見つかりませんでした。";
+    }catch(err){
+      console.error(err);
+      metaStatusEl.textContent="元タグの自動読込はできませんでした。必要なら手入力できます。";
+    }
+  }
+
   function showFile(file){
     inputFile=file;
     const baseName=file.name.replace(/\.[^.]+$/,"");
-    if(!outnameEl.value) outnameEl.value=baseName;
+    outnameEl.value=baseName;
     fileinfo.style.display="block";
     fileinfo.innerHTML=`<b>${escapeHtml(file.name)}</b><br><span class="muted">${humanSize(file.size)} · ${escapeHtml(file.type || "形式不明")}</span>`;
     convertBtn.disabled=false;
     convertBtn.removeAttribute("disabled");
     download.hidden=true; download.style.display="none";
     progress.value=0;
+
+    titleEl.value="";
+    artistEl.value="";
+    albumEl.value="";
+    albumArtistEl.value="";
+    genreEl.value="";
+    yearEl.value="";
+    trackEl.value="";
+    commentEl.value="";
+
     setStatus("ファイルを読み込みました。「MP3に変換」を押してください。", "ok");
+    readSourceMetadata(file);
   }
 
   function escapeHtml(s){

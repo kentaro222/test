@@ -44,7 +44,8 @@
       text-decoration:none; display:block;
     }
     button{background:var(--accent); color:#09101f}
-    button:disabled{opacity:.45; cursor:not-allowed}
+    button:disabled{opacity:.35; cursor:not-allowed}
+    button:not(:disabled){opacity:1; box-shadow:0 0 0 2px rgba(126,167,255,.18)}
     .download{background:var(--ok); color:#092114; margin-top:10px}
     .progress-wrap{margin-top:16px}
     progress{width:100%; height:10px; accent-color:var(--accent)}
@@ -101,7 +102,6 @@
 </main>
 
 <script type="module">
-  import { FFmpeg } from "./index.js";
 
   const $ = s => document.querySelector(s);
   const fileEl = $("#file"), drop = $("#drop"), convertBtn = $("#convert");
@@ -110,6 +110,7 @@
 
   let inputFile = null;
   let ffmpeg = null;
+  let FFmpegClass = null;
   let loaded = false;
   let logs = [];
   let resultURL = null;
@@ -130,16 +131,24 @@
     fileinfo.style.display="block";
     fileinfo.innerHTML=`<b>${escapeHtml(file.name)}</b><br><span class="muted">${humanSize(file.size)} · ${escapeHtml(file.type || "形式不明")}</span>`;
     convertBtn.disabled=false;
+    convertBtn.removeAttribute("disabled");
     download.hidden=true; download.style.display="none";
     progress.value=0;
-    setStatus("準備完了。");
+    setStatus("ファイルを読み込みました。「MP3に変換」を押してください。", "ok");
   }
 
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
 
-  fileEl.addEventListener("change",()=>fileEl.files[0] && showFile(fileEl.files[0]));
+  fileEl.addEventListener("change",()=>{
+    const f = fileEl.files && fileEl.files[0];
+    if (!f) {
+      setStatus("ファイルを取得できませんでした。", "err");
+      return;
+    }
+    showFile(f);
+  });
   ["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("drag")}));
   ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("drag")}));
   drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0]; if(f) showFile(f)});
@@ -151,7 +160,18 @@
     setStatus("FFmpegを読み込んでいます…");
     progress.value=5;
 
-    ffmpeg = new FFmpeg();
+    // FFmpegモジュールはここで初めて読み込む。
+    // これにより、FFmpeg側に問題があってもファイル選択UIは動作する。
+    if (!FFmpegClass) {
+      setStatus("FFmpegのJavaScriptを読み込んでいます…");
+      const mod = await import("./index.js");
+      if (!mod || typeof mod.FFmpeg !== "function") {
+        throw new Error("index.js から FFmpeg を読み込めませんでした。");
+      }
+      FFmpegClass = mod.FFmpeg;
+    }
+
+    ffmpeg = new FFmpegClass();
 
     ffmpeg.on("log", ({message})=>{
       logs.push(message);
@@ -177,7 +197,7 @@
     // Worker/CORS/404などで無限に「読み込み中」になるのを防ぐ。
     const timeoutPromise = new Promise((_, reject)=>{
       setTimeout(()=>reject(new Error(
-        "FFmpegの読み込みが30秒以内に完了しませんでした。ffmpegフォルダ内のファイルとGitHub PagesのURLを確認してください。"
+        "FFmpegの読み込みが30秒以内に完了しませんでした。index.html と同じ階層にあるFFmpeg関連ファイルを確認してください。"
       )), 30000);
     });
 

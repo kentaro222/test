@@ -55,7 +55,21 @@
     .note{font-size:12px;color:var(--muted);margin:14px 2px 0;line-height:1.6}
     details{margin-top:14px}
     pre{white-space:pre-wrap;max-height:190px;overflow:auto;background:#0b0d12;padding:10px;border-radius:8px;font-size:11px;color:#c7ccda}
-    @media(max-width:580px){.settings{grid-template-columns:1fr}}
+
+    .meta-grid{
+      display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:16px 0;
+    }
+    .field{display:flex; flex-direction:column; gap:6px}
+    .field.full{grid-column:1/-1}
+    .field label{font-size:12px;color:var(--muted)}
+    .field input,.field textarea{
+      width:100%; border:1px solid var(--line); background:#10131a; color:var(--text);
+      border-radius:10px; padding:11px 12px; font:inherit; outline:none;
+    }
+    .field input:focus,.field textarea:focus{border-color:var(--accent)}
+    .field textarea{min-height:78px;resize:vertical}
+
+    @media(max-width:580px){.settings,.meta-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
   </style>
 </head>
 <body>
@@ -78,6 +92,45 @@
       <div class="setting"><span>Target Loudness</span><b>-14 LUFS</b></div>
       <div class="setting"><span>True Peak</span><b>-1.5 dBTP</b></div>
       <div class="setting"><span>MP3 Bitrate</span><b>128 kbps</b></div>
+    </div>
+
+    <div class="meta-grid">
+      <div class="field full">
+        <label for="outname">出力ファイル名</label>
+        <input id="outname" type="text" placeholder="output_file" />
+      </div>
+      <div class="field">
+        <label for="title">タイトル</label>
+        <input id="title" type="text" />
+      </div>
+      <div class="field">
+        <label for="artist">アーティスト</label>
+        <input id="artist" type="text" />
+      </div>
+      <div class="field">
+        <label for="album">アルバム</label>
+        <input id="album" type="text" />
+      </div>
+      <div class="field">
+        <label for="albumArtist">アルバムアーティスト</label>
+        <input id="albumArtist" type="text" />
+      </div>
+      <div class="field">
+        <label for="genre">ジャンル</label>
+        <input id="genre" type="text" />
+      </div>
+      <div class="field">
+        <label for="year">年</label>
+        <input id="year" type="text" inputmode="numeric" />
+      </div>
+      <div class="field">
+        <label for="track">トラック番号</label>
+        <input id="track" type="text" inputmode="numeric" />
+      </div>
+      <div class="field full">
+        <label for="comment">コメント</label>
+        <textarea id="comment"></textarea>
+      </div>
     </div>
 
     <button id="convert" disabled>MP3に変換</button>
@@ -107,6 +160,9 @@
   const fileEl = $("#file"), drop = $("#drop"), convertBtn = $("#convert");
   const progress = $("#progress"), statusEl = $("#status"), logEl = $("#log");
   const download = $("#download"), fileinfo = $("#fileinfo");
+  const outnameEl = $("#outname"), titleEl = $("#title"), artistEl = $("#artist");
+  const albumEl = $("#album"), albumArtistEl = $("#albumArtist"), genreEl = $("#genre");
+  const yearEl = $("#year"), trackEl = $("#track"), commentEl = $("#comment");
 
   let inputFile = null;
   let ffmpeg = null;
@@ -128,6 +184,8 @@
 
   function showFile(file){
     inputFile=file;
+    const baseName=file.name.replace(/\.[^.]+$/,"");
+    if(!outnameEl.value) outnameEl.value=baseName;
     fileinfo.style.display="block";
     fileinfo.innerHTML=`<b>${escapeHtml(file.name)}</b><br><span class="muted">${humanSize(file.size)} · ${escapeHtml(file.type || "形式不明")}</span>`;
     convertBtn.disabled=false;
@@ -220,6 +278,31 @@
     return n;
   }
 
+
+  function cleanOutputBaseName(name){
+    let v=String(name || "").trim().replace(/\.mp3$/i,"");
+    v=v.replace(/[\\/:*?"<>|]/g,"_");
+    return v || "normalized";
+  }
+
+  function addMetadataArgs(args){
+    const fields=[
+      ["title", titleEl.value],
+      ["artist", artistEl.value],
+      ["album", albumEl.value],
+      ["album_artist", albumArtistEl.value],
+      ["genre", genreEl.value],
+      ["date", yearEl.value],
+      ["track", trackEl.value],
+      ["comment", commentEl.value]
+    ];
+    for(const [key,val] of fields){
+      const v=String(val || "").trim();
+      if(v) args.push("-metadata", `${key}=${v}`);
+    }
+    return args;
+  }
+
   convertBtn.addEventListener("click", async ()=>{
     if(!inputFile) return;
     convertBtn.disabled=true;
@@ -230,6 +313,7 @@
 
     const ext=(inputFile.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase() || "bin";
     const inName=`input.${ext}`;
+    const outputBase=cleanOutputBaseName(outnameEl.value);
     const outName="normalized.mp3";
 
     try{
@@ -274,23 +358,25 @@
         "print_format=summary"
       ].join(":");
 
-      await ffmpeg.exec([
+      const encodeArgs=[
         "-hide_banner","-y","-i",inName,
         "-vn",
         "-af",filter,
         "-c:a","libmp3lame",
         "-b:a","128k",
         "-ar","44100",
-        outName
-      ]);
+        "-id3v2_version","3"
+      ];
+      addMetadataArgs(encodeArgs);
+      encodeArgs.push(outName);
+      await ffmpeg.exec(encodeArgs);
 
       const data=await ffmpeg.readFile(outName);
       const blob=new Blob([data.buffer],{type:"audio/mpeg"});
       resultURL=URL.createObjectURL(blob);
 
-      const base=inputFile.name.replace(/\.[^.]+$/,"");
       download.href=resultURL;
-      download.download=`${base}_-14LUFS.mp3`;
+      download.download=`${outputBase}.mp3`;
       download.hidden=false; download.style.display="block";
 
       progress.value=100;

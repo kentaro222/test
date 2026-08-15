@@ -176,8 +176,7 @@
     ffmpeg.on("log", ({message})=>{
       logs.push(message);
       if(logs.length>250) logs.shift();
-      logEl.textContent=logs.join("
-");
+      logEl.textContent=logs.join("\n");
       logEl.scrollTop=logEl.scrollHeight;
     });
 

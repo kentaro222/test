@@ -145,7 +145,7 @@
       </div>
     </div>
 
-    <div id="metaStatus" class="muted" style="margin:-6px 0 14px">元ファイルのタグがあれば自動で読み込みます。</div>
+    <div id="metaStatus" class="muted" style="margin:-6px 0 14px">元ファイルのタグがあれば自動で読み込みます。空欄にした項目は出力時に削除されます。</div>
 
     <button id="convert" disabled>MP3に変換</button>
     <a id="download" class="download" hidden style="display:none">変換済みMP3を保存</a>
@@ -402,9 +402,14 @@
       ["track", trackEl.value],
       ["comment", commentEl.value]
     ];
+
+    // 空欄も明示的に指定する。
+    // FFmpegでは -metadata key= とすることで、そのタグを削除できる。
+    // そのため、元タグを読み込んだ後にユーザーが空欄へ変更した項目は
+    // 出力MP3では引き継がれない。
     for(const [key,val] of fields){
-      const v=String(val || "").trim();
-      if(v) args.push("-metadata", `${key}=${v}`);
+      const v=String(val ?? "").trim();
+      args.push("-metadata", `${key}=${v}`);
     }
     return args;
   }

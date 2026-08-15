@@ -33,7 +33,7 @@
     .muted{color:var(--muted); font-size:14px}
     input[type=file]{display:none}
     .settings{
-      display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin:16px 0;
+      display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:16px 0;
     }
     .setting{border:1px solid var(--line); border-radius:12px; padding:12px}
     .setting b{display:block; font-size:16px}
@@ -80,7 +80,7 @@
 <body>
 <main class="app">
   <h1>Audio Normalizer</h1>
-  <p class="lead">音声を -14 LUFS に整え、128 kbps MP3として書き出します。</p>
+  <p class="lead">音声を -14 LUFS に整え、MP3またはOGG Vorbisとして書き出します。</p>
 
   <section class="panel">
     <label class="drop" id="drop" tabindex="0">
@@ -94,14 +94,29 @@
     <div class="fileinfo" id="fileinfo"></div>
 
     <div class="settings">
+      <div class="setting">
+        <span>出力形式</span>
+        <select id="format" aria-label="出力形式">
+          <option value="mp3" selected>MP3</option>
+          <option value="ogg">OGG Vorbis</option>
+        </select>
+      </div>
       <div class="setting"><span>Target Loudness</span><b>-14 LUFS</b></div>
       <div class="setting"><span>True Peak</span><b>-1.5 dBTP</b></div>
-      <div class="setting">
+      <div class="setting" id="mp3QualitySetting">
         <span>MP3 Bitrate</span>
         <select id="bitrate" aria-label="MP3 Bitrate">
           <option value="96k">96 kbps</option>
           <option value="128k" selected>128 kbps</option>
           <option value="192k">192 kbps</option>
+        </select>
+      </div>
+      <div class="setting" id="oggQualitySetting" hidden>
+        <span>OGG 品質</span>
+        <select id="oggQuality" aria-label="OGG 品質">
+          <option value="3">軽量</option>
+          <option value="5" selected>標準</option>
+          <option value="7">高音質</option>
         </select>
       </div>
     </div>
@@ -178,6 +193,8 @@
   const albumEl = $("#album"), albumArtistEl = $("#albumArtist"), genreEl = $("#genre");
   const yearEl = $("#year"), trackEl = $("#track"), commentEl = $("#comment");
   const bitrateEl = $("#bitrate"), metaStatusEl = $("#metaStatus");
+  const formatEl = $("#format"), oggQualityEl = $("#oggQuality");
+  const mp3QualitySetting = $("#mp3QualitySetting"), oggQualitySetting = $("#oggQualitySetting");
 
   let inputFile = null;
   let ffmpeg = null;
@@ -305,6 +322,15 @@
     return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   }
 
+  function updateFormatUI(){
+    const isMP3 = formatEl.value === "mp3";
+    mp3QualitySetting.hidden = !isMP3;
+    oggQualitySetting.hidden = isMP3;
+  }
+
+  formatEl.addEventListener("change", updateFormatUI);
+  updateFormatUI();
+
   fileEl.addEventListener("change",()=>{
     const f = fileEl.files && fileEl.files[0];
     if (!f) {
@@ -386,7 +412,7 @@
 
 
   function cleanOutputBaseName(name){
-    let v=String(name || "").trim().replace(/\.mp3$/i,"");
+    let v=String(name || "").trim().replace(/\.(mp3|ogg)$/i,"");
     v=v.replace(/[\\/:*?"<>|]/g,"_");
     return v || "normalized";
   }
@@ -425,7 +451,8 @@
     const ext=(inputFile.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase() || "bin";
     const inName=`input.${ext}`;
     const outputBase=cleanOutputBaseName(outnameEl.value);
-    const outName="normalized.mp3";
+    const outputFormat=formatEl.value;
+    const outName=outputFormat==="ogg" ? "normalized.ogg" : "normalized.mp3";
 
     try{
       await loadFFmpeg();
@@ -472,26 +499,43 @@
       const encodeArgs=[
         "-hide_banner","-y","-i",inName,
         "-vn",
-        "-af",filter,
-        "-c:a","libmp3lame",
-        "-b:a",bitrateEl.value,
-        "-ar","44100",
-        "-id3v2_version","3"
+        "-af",filter
       ];
+
+      if(outputFormat==="ogg"){
+        encodeArgs.push(
+          "-c:a","libvorbis",
+          "-q:a",oggQualityEl.value,
+          "-ar","44100"
+        );
+      }else{
+        encodeArgs.push(
+          "-c:a","libmp3lame",
+          "-b:a",bitrateEl.value,
+          "-ar","44100",
+          "-id3v2_version","3"
+        );
+      }
+
       addMetadataArgs(encodeArgs);
       encodeArgs.push(outName);
       await ffmpeg.exec(encodeArgs);
 
       const data=await ffmpeg.readFile(outName);
-      const blob=new Blob([data.buffer],{type:"audio/mpeg"});
+      const blob=new Blob([data.buffer],{
+        type: outputFormat==="ogg" ? "audio/ogg" : "audio/mpeg"
+      });
       resultURL=URL.createObjectURL(blob);
 
       download.href=resultURL;
-      download.download=`${outputBase}.mp3`;
+      download.download=`${outputBase}.${outputFormat==="ogg" ? "ogg" : "mp3"}`;
       download.hidden=false; download.style.display="block";
 
       progress.value=100;
-      setStatus(`完了：-14 LUFS / -1.5 dBTP / ${bitrateEl.options[bitrateEl.selectedIndex].text} MP3`, "ok");
+      const qualityText = outputFormat==="ogg"
+        ? `${oggQualityEl.options[oggQualityEl.selectedIndex].text} OGG Vorbis`
+        : `${bitrateEl.options[bitrateEl.selectedIndex].text} MP3`;
+      setStatus(`完了：-14 LUFS / -1.5 dBTP / ${qualityText}`, "ok");
 
       // cleanup wasm FS
       try{await ffmpeg.deleteFile(inName)}catch{}

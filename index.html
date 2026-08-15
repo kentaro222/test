@@ -80,7 +80,7 @@
     </div>
 
     <button id="convert" disabled>MP3に変換</button>
-    <a id="download" class="download" hidden>変換済みMP3を保存</a>
+    <a id="download" class="download" hidden style="display:none">変換済みMP3を保存</a>
 
     <div class="progress-wrap">
       <progress id="progress" max="100" value="0"></progress>
@@ -93,16 +93,15 @@
     </details>
 
     <p class="note">
-      音声データ自体はサーバーへアップロードされず、このブラウザ内で処理されます。
-      初回のみFFmpeg WebAssembly本体とWorkerをCDNから読み込みます（本体は約30MB）。
+      音声データ自体は外部サーバーへアップロードされず、このブラウザ内で処理されます。
+      FFmpeg関連ファイルは index.html と同じ階層から読み込みます。
       大きなファイルではブラウザのメモリを多く使用します。
     </p>
   </section>
 </main>
 
 <script type="module">
-  import { FFmpeg } from "https://esm.sh/@ffmpeg/ffmpeg@0.12.15";
-  import { fetchFile, toBlobURL } from "https://esm.sh/@ffmpeg/util@0.12.2";
+  import { FFmpeg } from "./index.js";
 
   const $ = s => document.querySelector(s);
   const fileEl = $("#file"), drop = $("#drop"), convertBtn = $("#convert");
@@ -131,7 +130,7 @@
     fileinfo.style.display="block";
     fileinfo.innerHTML=`<b>${escapeHtml(file.name)}</b><br><span class="muted">${humanSize(file.size)} · ${escapeHtml(file.type || "形式不明")}</span>`;
     convertBtn.disabled=false;
-    download.hidden=true;
+    download.hidden=true; download.style.display="none";
     progress.value=0;
     setStatus("準備完了。");
   }
@@ -148,35 +147,45 @@
 
   async function loadFFmpeg(){
     if(loaded) return;
+
     setStatus("FFmpegを読み込んでいます…");
     progress.value=5;
 
     ffmpeg = new FFmpeg();
+
     ffmpeg.on("log", ({message})=>{
       logs.push(message);
       if(logs.length>250) logs.shift();
-      logEl.textContent=logs.join("\n");
+      logEl.textContent=logs.join("
+");
       logEl.scrollTop=logEl.scrollHeight;
     });
+
     ffmpeg.on("progress", ({progress:p})=>{
-      // Each pass has its own progress. The main stages set the base manually.
       const current = Number.isFinite(p) ? Math.max(0,Math.min(1,p)) : 0;
       if(progress.dataset.stage==="analyze") progress.value=15+current*30;
       if(progress.dataset.stage==="encode") progress.value=50+current*45;
     });
 
-    const baseURL="https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
-    const classWorkerSource="https://esm.sh/@ffmpeg/ffmpeg@0.12.15/es2022/worker.js";
-
-    // GitHub Pagesなど別オリジンのCDNからWorkerを直接生成すると
-    // SecurityErrorになるため、WorkerスクリプトもBlob URL化する。
-    await ffmpeg.load({
-      classWorkerURL: await toBlobURL(classWorkerSource, "text/javascript"),
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm")
+    // GitHub Pages上の同一オリジンに置いたファイルだけを使用する。
+    const loadPromise = ffmpeg.load({
+      classWorkerURL: new URL("./worker.js", location.href).href,
+      coreURL: new URL("./ffmpeg-core.js", location.href).href,
+      wasmURL: new URL("./ffmpeg-core.wasm", location.href).href
     });
+
+    // Worker/CORS/404などで無限に「読み込み中」になるのを防ぐ。
+    const timeoutPromise = new Promise((_, reject)=>{
+      setTimeout(()=>reject(new Error(
+        "FFmpegの読み込みが30秒以内に完了しませんでした。ffmpegフォルダ内のファイルとGitHub PagesのURLを確認してください。"
+      )), 30000);
+    });
+
+    await Promise.race([loadPromise, timeoutPromise]);
+
     loaded=true;
     progress.value=12;
+    setStatus("FFmpegの読み込み完了。");
   }
 
   function parseLoudnormJSON(text){
@@ -195,7 +204,7 @@
   convertBtn.addEventListener("click", async ()=>{
     if(!inputFile) return;
     convertBtn.disabled=true;
-    download.hidden=true;
+    download.hidden=true; download.style.display="none";
     logs=[];
     logEl.textContent="";
     if(resultURL){URL.revokeObjectURL(resultURL);resultURL=null}
@@ -208,7 +217,7 @@
       await loadFFmpeg();
       setStatus("ファイルを読み込んでいます…");
       progress.value=14;
-      await ffmpeg.writeFile(inName, await fetchFile(inputFile));
+      await ffmpeg.writeFile(inName, new Uint8Array(await inputFile.arrayBuffer()));
 
       // PASS 1: measure loudness
       progress.dataset.stage="analyze";
@@ -263,7 +272,7 @@
       const base=inputFile.name.replace(/\.[^.]+$/,"");
       download.href=resultURL;
       download.download=`${base}_-14LUFS.mp3`;
-      download.hidden=false;
+      download.hidden=false; download.style.display="block";
 
       progress.value=100;
       setStatus(`完了：-14 LUFS / -1.5 dBTP / 128 kbps MP3`, "ok");

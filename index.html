@@ -38,6 +38,11 @@
     .setting{border:1px solid var(--line); border-radius:12px; padding:12px}
     .setting b{display:block; font-size:16px}
     .setting span{font-size:12px;color:var(--muted)}
+    .setting select{
+      width:100%; margin-top:4px; border:1px solid var(--line);
+      background:#10131a; color:var(--text); border-radius:8px;
+      padding:8px 10px; font:inherit; font-weight:700;
+    }
     button,.download{
       width:100%; border:0; border-radius:12px; padding:14px 16px;
       font:inherit; font-weight:700; cursor:pointer; text-align:center;
@@ -91,7 +96,14 @@
     <div class="settings">
       <div class="setting"><span>Target Loudness</span><b>-14 LUFS</b></div>
       <div class="setting"><span>True Peak</span><b>-1.5 dBTP</b></div>
-      <div class="setting"><span>MP3 Bitrate</span><b>128 kbps</b></div>
+      <div class="setting">
+        <span>MP3 Bitrate</span>
+        <select id="bitrate" aria-label="MP3 Bitrate">
+          <option value="96k">96 kbps</option>
+          <option value="128k" selected>128 kbps</option>
+          <option value="192k">192 kbps</option>
+        </select>
+      </div>
     </div>
 
     <div class="meta-grid">
@@ -163,6 +175,7 @@
   const outnameEl = $("#outname"), titleEl = $("#title"), artistEl = $("#artist");
   const albumEl = $("#album"), albumArtistEl = $("#albumArtist"), genreEl = $("#genre");
   const yearEl = $("#year"), trackEl = $("#track"), commentEl = $("#comment");
+  const bitrateEl = $("#bitrate");
 
   let inputFile = null;
   let ffmpeg = null;
@@ -363,7 +376,7 @@
         "-vn",
         "-af",filter,
         "-c:a","libmp3lame",
-        "-b:a","128k",
+        "-b:a",bitrateEl.value,
         "-ar","44100",
         "-id3v2_version","3"
       ];
@@ -380,7 +393,7 @@
       download.hidden=false; download.style.display="block";
 
       progress.value=100;
-      setStatus(`完了：-14 LUFS / -1.5 dBTP / 128 kbps MP3`, "ok");
+      setStatus(`完了：-14 LUFS / -1.5 dBTP / ${bitrateEl.options[bitrateEl.selectedIndex].text} MP3`, "ok");
 
       // cleanup wasm FS
       try{await ffmpeg.deleteFile(inName)}catch{}

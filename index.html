@@ -4,551 +4,3727 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Audio Loudness Normalizer</title>
+
   <style>
     :root{
       color-scheme: dark;
-      --bg:#0d0f14; --panel:#171a22; --line:#2b3040;
-      --text:#f4f6fb; --muted:#aab1c3; --accent:#7ea7ff; --ok:#7fdaa4; --err:#ff8f8f;
+
+      --bg:#0d0f14;
+      --panel:#171a22;
+      --line:#2b3040;
+
+      --text:#f4f6fb;
+      --muted:#aab1c3;
+
+      --accent:#7ea7ff;
+      --ok:#7fdaa4;
+      --err:#ff8f8f;
     }
-    *{box-sizing:border-box}
+
+    *{
+      box-sizing:border-box;
+    }
+
     body{
-      margin:0; min-height:100vh; background:var(--bg); color:var(--text);
-      font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif;
-      display:grid; place-items:center; padding:24px;
+      margin:0;
+      min-height:100vh;
+
+      background:var(--bg);
+      color:var(--text);
+
+      font-family:
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        "Noto Sans JP",
+        sans-serif;
+
+      display:grid;
+      place-items:center;
+
+      padding:24px;
     }
-    .app{width:min(760px,100%)}
-    h1{font-size:clamp(24px,5vw,40px); margin:0 0 8px}
-    .lead{color:var(--muted); margin:0 0 22px}
+
+    .app{
+      width:min(760px,100%);
+    }
+
+    h1{
+      font-size:clamp(24px,5vw,40px);
+      margin:0 0 8px;
+    }
+
+    .lead{
+      color:var(--muted);
+      margin:0 0 22px;
+    }
+
     .panel{
-      background:var(--panel); border:1px solid var(--line);
-      border-radius:18px; padding:20px; box-shadow:0 18px 55px rgba(0,0,0,.25);
+      background:var(--panel);
+      border:1px solid var(--line);
+
+      border-radius:18px;
+      padding:20px;
+
+      box-shadow:
+        0 18px 55px
+        rgba(0,0,0,.25);
     }
+
     .drop{
-      border:2px dashed #46506a; border-radius:16px; min-height:190px;
-      display:grid; place-items:center; text-align:center; padding:24px; cursor:pointer;
-      transition:.15s ease; outline:none;
+      border:2px dashed #46506a;
+      border-radius:16px;
+
+      min-height:190px;
+
+      display:grid;
+      place-items:center;
+
+      text-align:center;
+
+      padding:24px;
+
+      cursor:pointer;
+
+      transition:.15s ease;
+
+      outline:none;
     }
-    .drop.drag{border-color:var(--accent); background:#182036}
-    .drop strong{font-size:18px; display:block; margin-bottom:6px}
-    .muted{color:var(--muted); font-size:14px}
-    input[type=file]{display:none}
+
+    .drop.drag{
+      border-color:var(--accent);
+      background:#182036;
+    }
+
+    .drop strong{
+      font-size:18px;
+      display:block;
+      margin-bottom:6px;
+    }
+
+    .muted{
+      color:var(--muted);
+      font-size:14px;
+    }
+
+    input[type=file]{
+      display:none;
+    }
+
     .settings{
-      display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:16px 0;
+      display:grid;
+      grid-template-columns:repeat(4,1fr);
+
+      gap:10px;
+
+      margin:16px 0;
     }
-    .setting{border:1px solid var(--line); border-radius:12px; padding:12px}
-    .setting b{display:block; font-size:16px}
-    .setting span{font-size:12px;color:var(--muted)}
+
+    .setting{
+      border:1px solid var(--line);
+      border-radius:12px;
+
+      padding:12px;
+    }
+
+    .setting b{
+      display:block;
+      font-size:16px;
+    }
+
+    .setting span{
+      font-size:12px;
+      color:var(--muted);
+    }
+
     .setting select{
-      width:100%; margin-top:4px; border:1px solid var(--line);
-      background:#10131a; color:var(--text); border-radius:8px;
-      padding:8px 10px; font:inherit; font-weight:700;
+      width:100%;
+
+      margin-top:4px;
+
+      border:1px solid var(--line);
+
+      background:#10131a;
+      color:var(--text);
+
+      border-radius:8px;
+
+      padding:8px 10px;
+
+      font:inherit;
+      font-weight:700;
     }
-    button,.download{
-      width:100%; border:0; border-radius:12px; padding:14px 16px;
-      font:inherit; font-weight:700; cursor:pointer; text-align:center;
-      text-decoration:none; display:block;
+
+    button,
+    .download{
+      width:100%;
+
+      border:0;
+      border-radius:12px;
+
+      padding:14px 16px;
+
+      font:inherit;
+      font-weight:700;
+
+      cursor:pointer;
+
+      text-align:center;
+      text-decoration:none;
+
+      display:block;
     }
-    button{background:var(--accent); color:#09101f}
-    button:disabled{opacity:.35; cursor:not-allowed}
-    button:not(:disabled){opacity:1; box-shadow:0 0 0 2px rgba(126,167,255,.18)}
-    .download{background:var(--ok); color:#092114; margin-top:10px}
-    .progress-wrap{margin-top:16px}
-    progress{width:100%; height:10px; accent-color:var(--accent)}
-    .status{margin-top:8px; font-size:14px; min-height:1.5em; color:var(--muted)}
-    .status.ok{color:var(--ok)} .status.err{color:var(--err)}
-    .fileinfo{margin-top:12px; padding:10px 12px; background:#11141b; border-radius:10px; display:none}
-    .note{font-size:12px;color:var(--muted);margin:14px 2px 0;line-height:1.6}
-    details{margin-top:14px}
-    pre{white-space:pre-wrap;max-height:190px;overflow:auto;background:#0b0d12;padding:10px;border-radius:8px;font-size:11px;color:#c7ccda}
+
+    button{
+      background:var(--accent);
+      color:#09101f;
+    }
+
+    button:disabled{
+      opacity:.35;
+      cursor:not-allowed;
+    }
+
+    button:not(:disabled){
+      opacity:1;
+
+      box-shadow:
+        0 0 0 2px
+        rgba(126,167,255,.18);
+    }
+
+    .download{
+      background:var(--ok);
+      color:#092114;
+
+      margin-top:10px;
+    }
+
+    .progress-wrap{
+      margin-top:16px;
+    }
+
+    progress{
+      width:100%;
+      height:10px;
+
+      accent-color:var(--accent);
+    }
+
+    .status{
+      margin-top:8px;
+
+      font-size:14px;
+
+      min-height:1.5em;
+
+      color:var(--muted);
+    }
+
+    .status.ok{
+      color:var(--ok);
+    }
+
+    .status.err{
+      color:var(--err);
+    }
+
+    .fileinfo{
+      margin-top:12px;
+
+      padding:10px 12px;
+
+      background:#11141b;
+
+      border-radius:10px;
+
+      display:none;
+    }
+
+    .note{
+      font-size:12px;
+
+      color:var(--muted);
+
+      margin:14px 2px 0;
+
+      line-height:1.6;
+    }
+
+    details{
+      margin-top:14px;
+    }
+
+    pre{
+      white-space:pre-wrap;
+
+      max-height:190px;
+
+      overflow:auto;
+
+      background:#0b0d12;
+
+      padding:10px;
+
+      border-radius:8px;
+
+      font-size:11px;
+
+      color:#c7ccda;
+    }
 
     .meta-grid{
-      display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:16px 0;
-    }
-    .field{display:flex; flex-direction:column; gap:6px}
-    .field.full{grid-column:1/-1}
-    .field label{font-size:12px;color:var(--muted)}
-    .field input,.field textarea{
-      width:100%; border:1px solid var(--line); background:#10131a; color:var(--text);
-      border-radius:10px; padding:11px 12px; font:inherit; outline:none;
-    }
-    .field input:focus,.field textarea:focus{border-color:var(--accent)}
-    .field textarea{min-height:78px;resize:vertical}
+      display:grid;
 
-    @media(max-width:580px){.settings,.meta-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
+      grid-template-columns:
+        1fr 1fr;
+
+      gap:10px;
+
+      margin:16px 0;
+    }
+
+    .field{
+      display:flex;
+      flex-direction:column;
+
+      gap:6px;
+    }
+
+    .field.full{
+      grid-column:1/-1;
+    }
+
+    .field label{
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    .field input,
+    .field textarea{
+      width:100%;
+
+      border:1px solid var(--line);
+
+      background:#10131a;
+      color:var(--text);
+
+      border-radius:10px;
+
+      padding:11px 12px;
+
+      font:inherit;
+
+      outline:none;
+    }
+
+    .field input:focus,
+    .field textarea:focus{
+      border-color:var(--accent);
+    }
+
+    .field textarea{
+      min-height:78px;
+      resize:vertical;
+    }
+
+    @media(max-width:580px){
+
+      .settings,
+      .meta-grid{
+        grid-template-columns:1fr;
+      }
+
+      .field.full{
+        grid-column:auto;
+      }
+    }
   </style>
 </head>
+
 <body>
+
 <main class="app">
+
   <h1>Audio Normalizer</h1>
-  <p class="lead">音声を -14 LUFS に整え、MP3またはOGG Vorbisとして書き出します。</p>
+
+  <p class="lead">
+    音声を -14 LUFS に整え、
+    MP3またはOGG Vorbisとして書き出します。
+  </p>
 
   <section class="panel">
-    <label class="drop" id="drop" tabindex="0">
+
+    <label
+      class="drop"
+      id="drop"
+      tabindex="0"
+    >
       <div>
-        <strong>音声ファイルをここにドロップ</strong>
-        <div class="muted">またはクリックしてファイルを選択</div>
+        <strong>
+          音声ファイルをここにドロップ
+        </strong>
+
+        <div class="muted">
+          またはクリックしてファイルを選択
+        </div>
       </div>
-      <input id="file" type="file" accept="audio/*,.wav,.flac,.m4a,.aac,.ogg,.opus,.mp3,.webm,.mp4" />
+
+      <input
+        id="file"
+        type="file"
+        accept="
+          audio/*,
+          .wav,
+          .flac,
+          .m4a,
+          .aac,
+          .ogg,
+          .opus,
+          .mp3,
+          .webm,
+          .mp4
+        "
+      />
+
     </label>
 
-    <div class="fileinfo" id="fileinfo"></div>
+    <div
+      class="fileinfo"
+      id="fileinfo"
+    ></div>
+
+
+    <!-- 出力設定 -->
 
     <div class="settings">
+
       <div class="setting">
-        <span>出力形式</span>
-        <select id="format" aria-label="出力形式">
-          <option value="mp3" selected>MP3</option>
-          <option value="ogg">OGG Vorbis</option>
+
+        <span>
+          出力形式
+        </span>
+
+        <select
+          id="format"
+          aria-label="出力形式"
+        >
+          <option
+            value="mp3"
+            selected
+          >
+            MP3
+          </option>
+
+          <option value="ogg">
+            OGG Vorbis
+          </option>
         </select>
+
       </div>
-      <div class="setting"><span>Target Loudness</span><b>-14 LUFS</b></div>
-      <div class="setting"><span>True Peak</span><b>-1.5 dBTP</b></div>
-      <div class="setting" id="mp3QualitySetting">
-        <span>MP3 Bitrate</span>
-        <select id="bitrate" aria-label="MP3 Bitrate">
-          <option value="96k">96 kbps</option>
-          <option value="128k" selected>128 kbps</option>
-          <option value="192k">192 kbps</option>
+
+
+      <div class="setting">
+
+        <span>
+          Target Loudness
+        </span>
+
+        <b>
+          -14 LUFS
+        </b>
+
+      </div>
+
+
+      <div class="setting">
+
+        <span>
+          True Peak
+        </span>
+
+        <b>
+          -1.5 dBTP
+        </b>
+
+      </div>
+
+
+      <div
+        class="setting"
+        id="mp3QualitySetting"
+      >
+
+        <span>
+          MP3 Bitrate
+        </span>
+
+        <select
+          id="bitrate"
+          aria-label="MP3 Bitrate"
+        >
+          <option value="96k">
+            96 kbps
+          </option>
+
+          <option
+            value="128k"
+            selected
+          >
+            128 kbps
+          </option>
+
+          <option value="192k">
+            192 kbps
+          </option>
         </select>
+
       </div>
-      <div class="setting" id="oggQualitySetting" hidden>
-        <span>OGG 品質</span>
-        <select id="oggQuality" aria-label="OGG 品質">
-          <option value="3">軽量</option>
-          <option value="5" selected>標準</option>
-          <option value="7">高音質</option>
+
+
+      <div
+        class="setting"
+        id="oggQualitySetting"
+        hidden
+      >
+
+        <span>
+          OGG 品質
+        </span>
+
+        <select
+          id="oggQuality"
+          aria-label="OGG 品質"
+        >
+          <option value="3">
+            軽量
+          </option>
+
+          <option
+            value="5"
+            selected
+          >
+            標準
+          </option>
+
+          <option value="7">
+            高音質
+          </option>
         </select>
+
       </div>
+
     </div>
+
+
+    <!-- メタデータ -->
 
     <div class="meta-grid">
+
       <div class="field full">
-        <label for="outname">出力ファイル名</label>
-        <input id="outname" type="text" placeholder="output_file" />
+
+        <label for="outname">
+          出力ファイル名
+        </label>
+
+        <input
+          id="outname"
+          type="text"
+          placeholder="output_file"
+        />
+
       </div>
+
+
       <div class="field">
-        <label for="title">タイトル</label>
-        <input id="title" type="text" />
+
+        <label for="title">
+          タイトル
+        </label>
+
+        <input
+          id="title"
+          type="text"
+        />
+
       </div>
+
+
       <div class="field">
-        <label for="artist">アーティスト</label>
-        <input id="artist" type="text" />
+
+        <label for="artist">
+          アーティスト
+        </label>
+
+        <input
+          id="artist"
+          type="text"
+        />
+
       </div>
+
+
       <div class="field">
-        <label for="album">アルバム</label>
-        <input id="album" type="text" />
+
+        <label for="album">
+          アルバム
+        </label>
+
+        <input
+          id="album"
+          type="text"
+        />
+
       </div>
+
+
       <div class="field">
-        <label for="albumArtist">アルバムアーティスト</label>
-        <input id="albumArtist" type="text" />
+
+        <label for="albumArtist">
+          アルバムアーティスト
+        </label>
+
+        <input
+          id="albumArtist"
+          type="text"
+        />
+
       </div>
+
+
       <div class="field">
-        <label for="genre">ジャンル</label>
-        <input id="genre" type="text" />
+
+        <label for="genre">
+          ジャンル
+        </label>
+
+        <input
+          id="genre"
+          type="text"
+        />
+
       </div>
+
+
       <div class="field">
-        <label for="year">年</label>
-        <input id="year" type="text" inputmode="numeric" />
+
+        <label for="year">
+          年
+        </label>
+
+        <input
+          id="year"
+          type="text"
+          inputmode="numeric"
+        />
+
       </div>
+
+
       <div class="field">
-        <label for="track">トラック番号</label>
-        <input id="track" type="text" inputmode="numeric" />
+
+        <label for="track">
+          トラック番号
+        </label>
+
+        <input
+          id="track"
+          type="text"
+          inputmode="numeric"
+        />
+
       </div>
+
+
       <div class="field full">
-        <label for="comment">コメント</label>
-        <textarea id="comment"></textarea>
+
+        <label for="comment">
+          コメント
+        </label>
+
+        <textarea
+          id="comment"
+        ></textarea>
+
       </div>
+
     </div>
 
-    <div id="metaStatus" class="muted" style="margin:-6px 0 14px">元ファイルのタグがあれば自動で読み込みます。空欄にした項目は出力時に削除されます。</div>
 
-    <button id="convert" disabled>MP3に変換</button>
-    <a id="download" class="download" hidden style="display:none">変換済みMP3を保存</a>
+    <div
+      id="metaStatus"
+      class="muted"
+      style="margin:-6px 0 14px"
+    >
+      元ファイルのタグがあれば自動で読み込みます。
+      空欄にした項目は出力時に削除されます。
+    </div>
+
+
+    <button
+      id="convert"
+      disabled
+    >
+      MP3に変換
+    </button>
+
+
+    <a
+      id="download"
+      class="download"
+      hidden
+      style="display:none"
+    >
+      変換済みMP3を保存
+    </a>
+
 
     <div class="progress-wrap">
-      <progress id="progress" max="100" value="0"></progress>
-      <div id="status" class="status">音声ファイルを選択してください。</div>
+
+      <progress
+        id="progress"
+        max="100"
+        value="0"
+      ></progress>
+
+      <div
+        id="status"
+        class="status"
+      >
+        音声ファイルを選択してください。
+      </div>
+
     </div>
 
+
     <details>
-      <summary class="muted">処理ログ</summary>
+
+      <summary class="muted">
+        処理ログ
+      </summary>
+
       <pre id="log"></pre>
+
     </details>
 
+
     <p class="note">
-      音声データ自体は外部サーバーへアップロードされず、このブラウザ内で処理されます。
+      音声データ自体は外部サーバーへアップロードされず、
+      このブラウザ内で処理されます。
       FFmpeg関連ファイルは index.html と同じ階層から読み込みます。
       大きなファイルではブラウザのメモリを多く使用します。
     </p>
+
   </section>
+
 </main>
+
 
 <script type="module">
 
-  const $ = s => document.querySelector(s);
-  const fileEl = $("#file"), drop = $("#drop"), convertBtn = $("#convert");
-  const progress = $("#progress"), statusEl = $("#status"), logEl = $("#log");
-  const download = $("#download"), fileinfo = $("#fileinfo");
-  const outnameEl = $("#outname"), titleEl = $("#title"), artistEl = $("#artist");
-  const albumEl = $("#album"), albumArtistEl = $("#albumArtist"), genreEl = $("#genre");
-  const yearEl = $("#year"), trackEl = $("#track"), commentEl = $("#comment");
-  const bitrateEl = $("#bitrate"), metaStatusEl = $("#metaStatus");
-  const formatEl = $("#format"), oggQualityEl = $("#oggQuality");
-  const mp3QualitySetting = $("#mp3QualitySetting"), oggQualitySetting = $("#oggQualitySetting");
+/* =========================================================
+   DOM
+========================================================= */
 
-  let inputFile = null;
-  let ffmpeg = null;
-  let FFmpegClass = null;
-  let loaded = false;
-  let logs = [];
-  let resultURL = null;
+const $ = s =>
+  document.querySelector(s);
 
-  function humanSize(bytes){
-    const u=["B","KB","MB","GB"]; let i=0,n=bytes;
-    while(n>=1024 && i<u.length-1){n/=1024;i++}
-    return `${n.toFixed(i?1:0)} ${u[i]}`;
+
+const fileEl = $("#file");
+const drop = $("#drop");
+const convertBtn = $("#convert");
+
+const progress = $("#progress");
+const statusEl = $("#status");
+const logEl = $("#log");
+
+const download = $("#download");
+const fileinfo = $("#fileinfo");
+
+const outnameEl = $("#outname");
+
+const titleEl = $("#title");
+const artistEl = $("#artist");
+
+const albumEl = $("#album");
+const albumArtistEl = $("#albumArtist");
+
+const genreEl = $("#genre");
+
+const yearEl = $("#year");
+const trackEl = $("#track");
+
+const commentEl = $("#comment");
+
+const bitrateEl = $("#bitrate");
+
+const metaStatusEl = $("#metaStatus");
+
+const formatEl = $("#format");
+const oggQualityEl = $("#oggQuality");
+
+const mp3QualitySetting =
+  $("#mp3QualitySetting");
+
+const oggQualitySetting =
+  $("#oggQualitySetting");
+
+
+/* =========================================================
+   状態
+========================================================= */
+
+let inputFile = null;
+
+let ffmpeg = null;
+let FFmpegClass = null;
+
+let loaded = false;
+
+let logs = [];
+
+let resultURL = null;
+
+
+/* =========================================================
+   共通関数
+========================================================= */
+
+function humanSize(bytes){
+
+  const units = [
+    "B",
+    "KB",
+    "MB",
+    "GB"
+  ];
+
+  let i = 0;
+  let n = bytes;
+
+  while(
+    n >= 1024 &&
+    i < units.length - 1
+  ){
+    n /= 1024;
+    i++;
   }
 
-  function setStatus(text, cls=""){
-    statusEl.textContent=text;
-    statusEl.className="status"+(cls?` ${cls}`:"");
-  }
+  return (
+    `${n.toFixed(i ? 1 : 0)} ${units[i]}`
+  );
+}
 
 
-  function parseInputMetadata(logText){
-    const tags={};
-    const lines=String(logText || "").split(/\r?\n/);
-    let inInput=false;
-    let inMetadata=false;
+function setStatus(
+  text,
+  cls = ""
+){
 
-    for(const raw of lines){
-      const line=raw.replace(/\x1b\[[0-9;]*m/g,"");
-      if(/^Input #\d+/.test(line.trim())){
-        inInput=true;
-        inMetadata=false;
-        continue;
+  statusEl.textContent = text;
+
+  statusEl.className =
+    "status" +
+    (
+      cls
+      ? ` ${cls}`
+      : ""
+    );
+}
+
+
+function escapeHtml(s){
+
+  return String(s).replace(
+    /[&<>"']/g,
+
+    c => ({
+      "&":"&amp;",
+      "<":"&lt;",
+      ">":"&gt;",
+      '"':"&quot;",
+      "'":"&#39;"
+    }[c])
+  );
+}
+
+
+/* =========================================================
+   FFmpegログから元タグを取得
+========================================================= */
+
+function parseInputMetadata(
+  logText
+){
+
+  const tags = {};
+
+  const lines =
+    String(
+      logText || ""
+    ).split(/\r?\n/);
+
+  let inInput = false;
+  let inMetadata = false;
+
+
+  for(
+    const raw of lines
+  ){
+
+    const line =
+      raw.replace(
+        /\x1b\[[0-9;]*m/g,
+        ""
+      );
+
+
+    if(
+      /^Input #\d+/.test(
+        line.trim()
+      )
+    ){
+
+      inInput = true;
+      inMetadata = false;
+
+      continue;
+    }
+
+
+    if(
+      !inInput
+    ){
+      continue;
+    }
+
+
+    if(
+      line.trim()
+      ===
+      "Metadata:"
+    ){
+
+      inMetadata = true;
+
+      continue;
+    }
+
+
+    if(
+      inMetadata
+    ){
+
+      const t =
+        line.trim();
+
+
+      if(
+        /^Duration:/.test(t) ||
+        /^Stream #/.test(t) ||
+        /^Side data:/.test(t)
+      ){
+        break;
       }
-      if(!inInput) continue;
-      if(line.trim()==="Metadata:"){
-        inMetadata=true;
-        continue;
-      }
-      if(inMetadata){
-        const t=line.trim();
-        if(/^Duration:/.test(t) || /^Stream #/.test(t) || /^Side data:/.test(t)) break;
-        const m=line.match(/^\s*([^:]+?)\s*:\s*(.*)$/);
-        if(m){
-          const key=m[1].trim().toLowerCase();
-          const val=m[2].trim();
-          if(val) tags[key]=val;
+
+
+      const m =
+        line.match(
+          /^\s*([^:]+?)\s*:\s*(.*)$/
+        );
+
+
+      if(
+        m
+      ){
+
+        const key =
+          m[1]
+          .trim()
+          .toLowerCase();
+
+        const val =
+          m[2]
+          .trim();
+
+
+        if(
+          val
+        ){
+          tags[key] = val;
         }
       }
     }
-    return tags;
   }
 
-  function applySourceMetadata(tags){
-    const get=(...keys)=>{
-      for(const k of keys){
-        if(tags[k] != null && String(tags[k]).trim()) return String(tags[k]).trim();
+
+  return tags;
+}
+
+
+/* =========================================================
+   読み込んだタグをフォームへ設定
+========================================================= */
+
+function applySourceMetadata(
+  tags
+){
+
+  const get =
+    (...keys) => {
+
+      for(
+        const k of keys
+      ){
+
+        if(
+          tags[k] != null &&
+          String(
+            tags[k]
+          ).trim()
+        ){
+
+          return String(
+            tags[k]
+          ).trim();
+        }
       }
+
       return "";
     };
 
-    titleEl.value=get("title");
-    artistEl.value=get("artist");
-    albumEl.value=get("album");
-    albumArtistEl.value=get("album_artist","album artist","albumartist");
-    genreEl.value=get("genre");
-    yearEl.value=get("date","year");
-    trackEl.value=get("track","tracknumber","track number");
-    commentEl.value=get("comment","description");
 
-    return [titleEl.value,artistEl.value,albumEl.value,albumArtistEl.value,genreEl.value,yearEl.value,trackEl.value,commentEl.value].filter(Boolean).length;
-  }
+  titleEl.value =
+    get(
+      "title"
+    );
 
-  async function readSourceMetadata(file){
-    metaStatusEl.textContent="元ファイルのタグを読み込んでいます…";
-    try{
-      await loadFFmpeg();
-      const ext=(file.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase() || "bin";
-      const probeName=`metadata_input.${ext}`;
-      logs=[];
-      logEl.textContent="";
-      await ffmpeg.writeFile(probeName, new Uint8Array(await file.arrayBuffer()));
-      await ffmpeg.exec([
-        "-hide_banner","-i",probeName,
-        "-map","0:a:0?",
-        "-frames:a","1",
-        "-f","null","-"
-      ]);
-      const tags=parseInputMetadata(logs.join("\n"));
-      const count=applySourceMetadata(tags);
-      try{await ffmpeg.deleteFile(probeName)}catch{}
-      metaStatusEl.textContent=count
-        ? `元ファイルから ${count} 項目のタグを読み込みました。`
-        : "元ファイルに読み込めるタグは見つかりませんでした。";
-    }catch(err){
-      console.error(err);
-      metaStatusEl.textContent="元タグの自動読込はできませんでした。必要なら手入力できます。";
+
+  artistEl.value =
+    get(
+      "artist"
+    );
+
+
+  albumEl.value =
+    get(
+      "album"
+    );
+
+
+  albumArtistEl.value =
+    get(
+      "album_artist",
+      "album artist",
+      "albumartist"
+    );
+
+
+  genreEl.value =
+    get(
+      "genre"
+    );
+
+
+  yearEl.value =
+    get(
+      "date",
+      "year"
+    );
+
+
+  trackEl.value =
+    get(
+      "track",
+      "tracknumber",
+      "track number"
+    );
+
+
+  commentEl.value =
+    get(
+      "comment",
+      "description"
+    );
+
+
+  return [
+    titleEl.value,
+    artistEl.value,
+    albumEl.value,
+    albumArtistEl.value,
+    genreEl.value,
+    yearEl.value,
+    trackEl.value,
+    commentEl.value
+  ].filter(Boolean).length;
+}
+
+
+/* =========================================================
+   MP3 ID3v2 COMM 直接読込
+
+   FFmpegログの "comment" 表示だけに依存せず、
+   元MP3のID3v2 COMMフレームを直接読む。
+
+   対応:
+   - ID3v2.3
+   - ID3v2.4
+   - ISO-8859-1 / UTF-16 / UTF-16BE / UTF-8
+   - 複数COMMがある場合は、空Descriptionを優先
+========================================================= */
+
+function readUInt32BE(
+  bytes,
+  offset
+){
+
+  return (
+    (
+      bytes[offset] << 24
+    )
+    |
+    (
+      bytes[offset + 1] << 16
+    )
+    |
+    (
+      bytes[offset + 2] << 8
+    )
+    |
+    bytes[offset + 3]
+  ) >>> 0;
+}
+
+
+function removeUnsynchronisation(
+  bytes
+){
+
+  const out = [];
+
+  for(
+    let i = 0;
+    i < bytes.length;
+    i++
+  ){
+
+    out.push(
+      bytes[i]
+    );
+
+    if(
+      bytes[i] === 0xff
+      &&
+      i + 1 < bytes.length
+      &&
+      bytes[i + 1] === 0x00
+    ){
+      i++;
     }
   }
 
-  function showFile(file){
-    inputFile=file;
-    const baseName=file.name.replace(/\.[^.]+$/,"");
-    outnameEl.value=baseName;
-    fileinfo.style.display="block";
-    fileinfo.innerHTML=`<b>${escapeHtml(file.name)}</b><br><span class="muted">${humanSize(file.size)} · ${escapeHtml(file.type || "形式不明")}</span>`;
-    convertBtn.disabled=false;
-    convertBtn.removeAttribute("disabled");
-    download.hidden=true; download.style.display="none";
-    progress.value=0;
+  return new Uint8Array(
+    out
+  );
+}
 
-    titleEl.value="";
-    artistEl.value="";
-    albumEl.value="";
-    albumArtistEl.value="";
-    genreEl.value="";
-    yearEl.value="";
-    trackEl.value="";
-    commentEl.value="";
 
-    setStatus("ファイルを読み込みました。「MP3に変換」を押してください。", "ok");
-    readSourceMetadata(file);
+function decodeLatin1(
+  bytes
+){
+
+  try{
+    return new TextDecoder(
+      "windows-1252"
+    ).decode(bytes);
+  }catch{
+    let s = "";
+
+    for(
+      const b of bytes
+    ){
+      s += String.fromCharCode(b);
+    }
+
+    return s;
+  }
+}
+
+
+function decodeUTF16BE(
+  bytes
+){
+
+  let s = "";
+
+  for(
+    let i = 0;
+    i + 1 < bytes.length;
+    i += 2
+  ){
+
+    s += String.fromCharCode(
+      (
+        bytes[i] << 8
+      )
+      |
+      bytes[i + 1]
+    );
   }
 
-  function escapeHtml(s){
-    return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  return s;
+}
+
+
+function decodeID3Text(
+  bytes,
+  encoding
+){
+
+  if(
+    !bytes ||
+    !bytes.length
+  ){
+    return "";
   }
 
-  function updateFormatUI(){
-    const isMP3 = formatEl.value === "mp3";
-    mp3QualitySetting.hidden = !isMP3;
-    oggQualitySetting.hidden = isMP3;
+  if(
+    encoding === 0
+  ){
+    return decodeLatin1(
+      bytes
+    );
   }
 
-  formatEl.addEventListener("change", updateFormatUI);
-  updateFormatUI();
+  if(
+    encoding === 3
+  ){
+    return new TextDecoder(
+      "utf-8"
+    ).decode(bytes);
+  }
 
-  fileEl.addEventListener("change",()=>{
-    const f = fileEl.files && fileEl.files[0];
-    if (!f) {
-      setStatus("ファイルを取得できませんでした。", "err");
+  if(
+    encoding === 2
+  ){
+    return decodeUTF16BE(
+      bytes
+    );
+  }
+
+  /*
+    encoding 1:
+    UTF-16 with BOM
+  */
+
+  if(
+    bytes.length >= 2
+    &&
+    bytes[0] === 0xff
+    &&
+    bytes[1] === 0xfe
+  ){
+    return new TextDecoder(
+      "utf-16le"
+    ).decode(
+      bytes.slice(2)
+    );
+  }
+
+  if(
+    bytes.length >= 2
+    &&
+    bytes[0] === 0xfe
+    &&
+    bytes[1] === 0xff
+  ){
+    return decodeUTF16BE(
+      bytes.slice(2)
+    );
+  }
+
+  /*
+    BOMがない不正/特殊な実装は
+    ID3でよく使われるLEとして扱う。
+  */
+
+  return new TextDecoder(
+    "utf-16le"
+  ).decode(bytes);
+}
+
+
+function findID3Terminator(
+  bytes,
+  start,
+  encoding
+){
+
+  if(
+    encoding === 0
+    ||
+    encoding === 3
+  ){
+
+    for(
+      let i = start;
+      i < bytes.length;
+      i++
+    ){
+
+      if(
+        bytes[i] === 0x00
+      ){
+        return {
+          end: i,
+          next: i + 1
+        };
+      }
+    }
+
+    return {
+      end: bytes.length,
+      next: bytes.length
+    };
+  }
+
+  /*
+    UTF-16系は 00 00 で終端。
+    2byte境界を守って検索する。
+  */
+
+  for(
+    let i = start;
+    i + 1 < bytes.length;
+    i += 2
+  ){
+
+    if(
+      bytes[i] === 0x00
+      &&
+      bytes[i + 1] === 0x00
+    ){
+
+      return {
+        end: i,
+        next: i + 2
+      };
+    }
+  }
+
+  return {
+    end: bytes.length,
+    next: bytes.length
+  };
+}
+
+
+function parseCOMMFrame(
+  payload
+){
+
+  if(
+    payload.length < 4
+  ){
+    return null;
+  }
+
+  const encoding =
+    payload[0];
+
+  const language =
+    String.fromCharCode(
+      payload[1],
+      payload[2],
+      payload[3]
+    );
+
+  const descStart =
+    4;
+
+  const term =
+    findID3Terminator(
+      payload,
+      descStart,
+      encoding
+    );
+
+  const description =
+    decodeID3Text(
+      payload.slice(
+        descStart,
+        term.end
+      ),
+      encoding
+    )
+    .replace(/\u0000+$/g,"")
+    .trim();
+
+  const value =
+    decodeID3Text(
+      payload.slice(
+        term.next
+      ),
+      encoding
+    )
+    .replace(/\u0000+$/g,"")
+    .trim();
+
+  return {
+    language,
+    description,
+    value
+  };
+}
+
+
+async function readMP3COMM(
+  file
+){
+
+  /*
+    MP3以外ではCOMMを探さない。
+  */
+
+  const ext =
+    (
+      file.name
+      .split(".")
+      .pop()
+      ||
+      ""
+    )
+    .toLowerCase();
+
+  if(
+    ext !== "mp3"
+    &&
+    file.type !== "audio/mpeg"
+  ){
+    return null;
+  }
+
+
+  const bytes =
+    new Uint8Array(
+      await file.arrayBuffer()
+    );
+
+
+  if(
+    bytes.length < 10
+    ||
+    bytes[0] !== 0x49
+    ||
+    bytes[1] !== 0x44
+    ||
+    bytes[2] !== 0x33
+  ){
+    return null;
+  }
+
+
+  const version =
+    bytes[3];
+
+  if(
+    version !== 3
+    &&
+    version !== 4
+  ){
+    return null;
+  }
+
+
+  const tagFlags =
+    bytes[5];
+
+  const tagSize =
+    readSyncSafe(
+      bytes,
+      6
+    );
+
+  const tagEnd =
+    Math.min(
+      bytes.length,
+      10 + tagSize
+    );
+
+
+  let pos =
+    10;
+
+
+  /*
+    Extended Header
+  */
+
+  if(
+    tagFlags & 0x40
+  ){
+
+    if(
+      pos + 4 <= tagEnd
+    ){
+
+      if(
+        version === 3
+      ){
+
+        const extSize =
+          readUInt32BE(
+            bytes,
+            pos
+          );
+
+        /*
+          v2.3:
+          extended header size値には
+          sizeフィールド自身の4byteを含めない。
+        */
+
+        pos +=
+          4 +
+          extSize;
+
+      }else{
+
+        const extSize =
+          readSyncSafe(
+            bytes,
+            pos
+          );
+
+        /*
+          v2.4:
+          サイズはextended header全体。
+        */
+
+        pos +=
+          extSize;
+      }
+    }
+  }
+
+
+  const comments =
+    [];
+
+
+  while(
+    pos + 10 <= tagEnd
+  ){
+
+    /*
+      Padding
+    */
+
+    if(
+      bytes[pos] === 0
+      &&
+      bytes[pos + 1] === 0
+      &&
+      bytes[pos + 2] === 0
+      &&
+      bytes[pos + 3] === 0
+    ){
+      break;
+    }
+
+
+    const id =
+      String.fromCharCode(
+        bytes[pos],
+        bytes[pos + 1],
+        bytes[pos + 2],
+        bytes[pos + 3]
+      );
+
+
+    /*
+      ID3 frame IDとして不正なら終了。
+    */
+
+    if(
+      !/^[A-Z0-9]{4}$/.test(id)
+    ){
+      break;
+    }
+
+
+    const frameSize =
+      version === 4
+
+      ? readSyncSafe(
+          bytes,
+          pos + 4
+        )
+
+      : readUInt32BE(
+          bytes,
+          pos + 4
+        );
+
+
+    if(
+      frameSize <= 0
+      ||
+      pos + 10 + frameSize
+      >
+      tagEnd
+    ){
+      break;
+    }
+
+
+    const frameFlags1 =
+      bytes[pos + 8];
+
+    const frameFlags2 =
+      bytes[pos + 9];
+
+
+    let payload =
+      bytes.slice(
+        pos + 10,
+        pos + 10 + frameSize
+      );
+
+
+    /*
+      ID3v2.4 frame-level unsynchronisation
+    */
+
+    if(
+      version === 4
+      &&
+      (
+        frameFlags2 & 0x02
+      )
+    ){
+      payload =
+        removeUnsynchronisation(
+          payload
+        );
+    }
+
+
+    /*
+      タグ全体のunsynchronisation
+      v2.3で主に使用される。
+    */
+
+    if(
+      tagFlags & 0x80
+    ){
+      payload =
+        removeUnsynchronisation(
+          payload
+        );
+    }
+
+
+    /*
+      Compression / Encryption があるフレームは
+      この簡易リーダーでは扱わない。
+    */
+
+    const unsupported =
+      version === 3
+
+      ? (
+          frameFlags2 & 0xc0
+        )
+
+      : (
+          frameFlags2 & 0x0c
+        );
+
+
+    if(
+      id === "COMM"
+      &&
+      !unsupported
+    ){
+
+      const parsed =
+        parseCOMMFrame(
+          payload
+        );
+
+      if(
+        parsed
+      ){
+        comments.push(
+          parsed
+        );
+      }
+    }
+
+
+    pos +=
+      10 +
+      frameSize;
+  }
+
+
+  if(
+    !comments.length
+  ){
+    return null;
+  }
+
+
+  /*
+    一般的な「コメント」欄との互換性を優先。
+
+    優先順位:
+    1. Descriptionが空
+    2. Descriptionが comment/comments
+    3. その他
+  */
+
+  comments.sort(
+    (a,b) => {
+
+      const score =
+        x => {
+
+          const d =
+            String(
+              x.description || ""
+            )
+            .trim()
+            .toLowerCase();
+
+          if(
+            d === ""
+          ){
+            return 0;
+          }
+
+          if(
+            d === "comment"
+            ||
+            d === "comments"
+          ){
+            return 1;
+          }
+
+          return 2;
+        };
+
+      return (
+        score(a)
+        -
+        score(b)
+      );
+    }
+  );
+
+
+  return comments[0].value;
+}
+
+
+/* =========================================================
+   元ファイルのメタデータ読込
+========================================================= */
+
+async function readSourceMetadata(
+  file
+){
+
+  metaStatusEl.textContent =
+    "元ファイルのタグを読み込んでいます…";
+
+
+  try{
+
+    await loadFFmpeg();
+
+
+    const ext =
+      (
+        file.name
+        .split(".")
+        .pop()
+        ||
+        "bin"
+      )
+      .replace(
+        /[^a-z0-9]/gi,
+        ""
+      )
+      .toLowerCase()
+      ||
+      "bin";
+
+
+    const probeName =
+      `metadata_input.${ext}`;
+
+
+    logs = [];
+
+    logEl.textContent = "";
+
+
+    await ffmpeg.writeFile(
+      probeName,
+
+      new Uint8Array(
+        await file.arrayBuffer()
+      )
+    );
+
+
+    await ffmpeg.exec([
+      "-hide_banner",
+      "-i",
+      probeName,
+
+      "-map",
+      "0:a:0?",
+
+      "-frames:a",
+      "1",
+
+      "-f",
+      "null",
+
+      "-"
+    ]);
+
+
+    const tags =
+      parseInputMetadata(
+        logs.join("\n")
+      );
+
+
+    /*
+      MP3のコメントだけは、
+      FFmpegログよりID3v2 COMM直接読込を優先。
+    */
+
+    const directComment =
+      await readMP3COMM(
+        file
+      );
+
+
+    applySourceMetadata(
+      tags
+    );
+
+
+    if(
+      directComment !== null
+    ){
+      commentEl.value =
+        directComment;
+    }
+
+
+    const count =
+      [
+        titleEl.value,
+        artistEl.value,
+        albumEl.value,
+        albumArtistEl.value,
+        genreEl.value,
+        yearEl.value,
+        trackEl.value,
+        commentEl.value
+      ]
+      .filter(Boolean)
+      .length;
+
+
+    try{
+      await ffmpeg.deleteFile(
+        probeName
+      );
+    }catch{}
+
+
+    metaStatusEl.textContent =
+      count
+
+      ? (
+          directComment !== null
+
+          ? `元ファイルから ${count} 項目のタグを読み込みました。コメントはID3 COMMから直接取得しました。`
+
+          : `元ファイルから ${count} 項目のタグを読み込みました。`
+        )
+
+      : "元ファイルに読み込めるタグは見つかりませんでした。";
+
+
+  }catch(err){
+
+    console.error(
+      err
+    );
+
+
+    metaStatusEl.textContent =
+      "元タグの自動読込はできませんでした。必要なら手入力できます。";
+  }
+}
+
+
+/* =========================================================
+   ファイル選択
+========================================================= */
+
+function showFile(
+  file
+){
+
+  inputFile = file;
+
+
+  const baseName =
+    file.name.replace(
+      /\.[^.]+$/,
+      ""
+    );
+
+
+  outnameEl.value =
+    baseName;
+
+
+  fileinfo.style.display =
+    "block";
+
+
+  fileinfo.innerHTML =
+    `
+      <b>
+        ${escapeHtml(file.name)}
+      </b>
+
+      <br>
+
+      <span class="muted">
+        ${humanSize(file.size)}
+        ·
+        ${escapeHtml(
+          file.type ||
+          "形式不明"
+        )}
+      </span>
+    `;
+
+
+  convertBtn.disabled =
+    false;
+
+
+  convertBtn.removeAttribute(
+    "disabled"
+  );
+
+
+  download.hidden =
+    true;
+
+  download.style.display =
+    "none";
+
+
+  progress.value =
+    0;
+
+
+  titleEl.value =
+    "";
+
+  artistEl.value =
+    "";
+
+  albumEl.value =
+    "";
+
+  albumArtistEl.value =
+    "";
+
+  genreEl.value =
+    "";
+
+  yearEl.value =
+    "";
+
+  trackEl.value =
+    "";
+
+  commentEl.value =
+    "";
+
+
+  setStatus(
+    "ファイルを読み込みました。変換ボタンを押してください。",
+    "ok"
+  );
+
+
+  readSourceMetadata(
+    file
+  );
+}
+
+
+/* =========================================================
+   出力形式UI
+========================================================= */
+
+function updateFormatUI(){
+
+  const isMP3 =
+    formatEl.value
+    ===
+    "mp3";
+
+
+  mp3QualitySetting.hidden =
+    !isMP3;
+
+
+  oggQualitySetting.hidden =
+    isMP3;
+
+
+  convertBtn.textContent =
+    isMP3
+    ? "MP3に変換"
+    : "OGGに変換";
+}
+
+
+formatEl.addEventListener(
+  "change",
+  updateFormatUI
+);
+
+
+updateFormatUI();
+
+
+/* =========================================================
+   ファイル選択イベント
+========================================================= */
+
+fileEl.addEventListener(
+  "change",
+
+  () => {
+
+    const f =
+      fileEl.files &&
+      fileEl.files[0];
+
+
+    if(
+      !f
+    ){
+
+      setStatus(
+        "ファイルを取得できませんでした。",
+        "err"
+      );
+
       return;
     }
-    showFile(f);
-  });
-  ["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("drag")}));
-  ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("drag")}));
-  drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0]; if(f) showFile(f)});
-  drop.addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();fileEl.click()}});
 
-  async function loadFFmpeg(){
-    if(loaded) return;
 
-    setStatus("FFmpegを読み込んでいます…");
-    progress.value=5;
+    showFile(
+      f
+    );
+  }
+);
 
-    // FFmpegモジュールはここで初めて読み込む。
-    // これにより、FFmpeg側に問題があってもファイル選択UIは動作する。
-    if (!FFmpegClass) {
-      setStatus("FFmpegのJavaScriptを読み込んでいます…");
-      const mod = await import("./index.js");
-      if (!mod || typeof mod.FFmpeg !== "function") {
-        throw new Error("index.js から FFmpeg を読み込めませんでした。");
+
+/* =========================================================
+   ドラッグ&ドロップ
+========================================================= */
+
+[
+  "dragenter",
+  "dragover"
+].forEach(
+
+  ev =>
+
+    drop.addEventListener(
+      ev,
+
+      e => {
+
+        e.preventDefault();
+
+        drop.classList.add(
+          "drag"
+        );
       }
-      FFmpegClass = mod.FFmpeg;
+    )
+);
+
+
+[
+  "dragleave",
+  "drop"
+].forEach(
+
+  ev =>
+
+    drop.addEventListener(
+      ev,
+
+      e => {
+
+        e.preventDefault();
+
+        drop.classList.remove(
+          "drag"
+        );
+      }
+    )
+);
+
+
+drop.addEventListener(
+  "drop",
+
+  e => {
+
+    const f =
+      e.dataTransfer.files[0];
+
+
+    if(
+      f
+    ){
+      showFile(
+        f
+      );
+    }
+  }
+);
+
+
+drop.addEventListener(
+  "keydown",
+
+  e => {
+
+    if(
+      e.key === "Enter" ||
+      e.key === " "
+    ){
+
+      e.preventDefault();
+
+      fileEl.click();
+    }
+  }
+);
+
+
+/* =========================================================
+   FFmpegロード
+========================================================= */
+
+async function loadFFmpeg(){
+
+  if(
+    loaded
+  ){
+    return;
+  }
+
+
+  setStatus(
+    "FFmpegを読み込んでいます…"
+  );
+
+
+  progress.value =
+    5;
+
+
+  if(
+    !FFmpegClass
+  ){
+
+    setStatus(
+      "FFmpegのJavaScriptを読み込んでいます…"
+    );
+
+
+    const mod =
+      await import(
+        "./index.js"
+      );
+
+
+    if(
+      !mod ||
+      typeof mod.FFmpeg
+      !==
+      "function"
+    ){
+
+      throw new Error(
+        "index.js から FFmpeg を読み込めませんでした。"
+      );
     }
 
-    ffmpeg = new FFmpegClass();
 
-    ffmpeg.on("log", ({message})=>{
-      logs.push(message);
-      if(logs.length>250) logs.shift();
-      logEl.textContent=logs.join("\n");
-      logEl.scrollTop=logEl.scrollHeight;
-    });
-
-    ffmpeg.on("progress", ({progress:p})=>{
-      const current = Number.isFinite(p) ? Math.max(0,Math.min(1,p)) : 0;
-      if(progress.dataset.stage==="analyze") progress.value=15+current*30;
-      if(progress.dataset.stage==="encode") progress.value=50+current*45;
-    });
-
-    // GitHub Pages上の同一オリジンに置いたファイルだけを使用する。
-    const loadPromise = ffmpeg.load({
-      classWorkerURL: new URL("./worker.js", location.href).href,
-      coreURL: new URL("./ffmpeg-core.js", location.href).href,
-      wasmURL: new URL("./ffmpeg-core.wasm", location.href).href
-    });
-
-    // Worker/CORS/404などで無限に「読み込み中」になるのを防ぐ。
-    const timeoutPromise = new Promise((_, reject)=>{
-      setTimeout(()=>reject(new Error(
-        "FFmpegの読み込みが30秒以内に完了しませんでした。index.html と同じ階層にあるFFmpeg関連ファイルを確認してください。"
-      )), 30000);
-    });
-
-    await Promise.race([loadPromise, timeoutPromise]);
-
-    loaded=true;
-    progress.value=12;
-    setStatus("FFmpegの読み込み完了。");
-  }
-
-  function parseLoudnormJSON(text){
-    // loudnorm JSON is emitted in the log. Find the last JSON object containing input_i.
-    const matches=[...text.matchAll(/\{\s*"input_i"[\s\S]*?"target_offset"\s*:\s*"[^"]+"\s*\}/g)];
-    if(!matches.length) throw new Error("ラウドネス解析結果を取得できませんでした。");
-    return JSON.parse(matches[matches.length-1][0]);
-  }
-
-  function safeNum(v,name){
-    const n=Number(v);
-    if(!Number.isFinite(n)) throw new Error(`${name} の解析値が不正です。`);
-    return n;
+    FFmpegClass =
+      mod.FFmpeg;
   }
 
 
-  function cleanOutputBaseName(name){
-    let v=String(name || "").trim().replace(/\.(mp3|ogg)$/i,"");
-    v=v.replace(/[\\/:*?"<>|]/g,"_");
-    return v || "normalized";
-  }
+  ffmpeg =
+    new FFmpegClass();
 
-  function addMetadataArgs(args){
-    const fields=[
-      ["title", titleEl.value],
-      ["artist", artistEl.value],
-      ["album", albumEl.value],
-      ["album_artist", albumArtistEl.value],
-      ["genre", genreEl.value],
-      ["date", yearEl.value],
-      ["track", trackEl.value],
-      ["comment", commentEl.value]
+
+  ffmpeg.on(
+    "log",
+
+    ({message}) => {
+
+      logs.push(
+        message
+      );
+
+
+      if(
+        logs.length >
+        250
+      ){
+        logs.shift();
+      }
+
+
+      logEl.textContent =
+        logs.join("\n");
+
+
+      logEl.scrollTop =
+        logEl.scrollHeight;
+    }
+  );
+
+
+  ffmpeg.on(
+    "progress",
+
+    ({progress:p}) => {
+
+      const current =
+        Number.isFinite(p)
+
+        ? Math.max(
+            0,
+            Math.min(
+              1,
+              p
+            )
+          )
+
+        : 0;
+
+
+      if(
+        progress.dataset.stage
+        ===
+        "analyze"
+      ){
+
+        progress.value =
+          15 +
+          current * 30;
+      }
+
+
+      if(
+        progress.dataset.stage
+        ===
+        "encode"
+      ){
+
+        progress.value =
+          50 +
+          current * 45;
+      }
+    }
+  );
+
+
+  const loadPromise =
+    ffmpeg.load({
+
+      classWorkerURL:
+        new URL(
+          "./worker.js",
+          location.href
+        ).href,
+
+      coreURL:
+        new URL(
+          "./ffmpeg-core.js",
+          location.href
+        ).href,
+
+      wasmURL:
+        new URL(
+          "./ffmpeg-core.wasm",
+          location.href
+        ).href
+    });
+
+
+  const timeoutPromise =
+    new Promise(
+      (_,reject) => {
+
+        setTimeout(
+          () => reject(
+
+            new Error(
+              "FFmpegの読み込みが30秒以内に完了しませんでした。index.html と同じ階層にあるFFmpeg関連ファイルを確認してください。"
+            )
+          ),
+
+          30000
+        );
+      }
+    );
+
+
+  await Promise.race([
+    loadPromise,
+    timeoutPromise
+  ]);
+
+
+  loaded =
+    true;
+
+
+  progress.value =
+    12;
+
+
+  setStatus(
+    "FFmpegの読み込み完了。"
+  );
+}
+
+
+/* =========================================================
+   loudnorm JSON
+========================================================= */
+
+function parseLoudnormJSON(
+  text
+){
+
+  const matches =
+    [
+      ...text.matchAll(
+        /\{\s*"input_i"[\s\S]*?"target_offset"\s*:\s*"[^"]+"\s*\}/g
+      )
     ];
 
-    // 空欄も明示的に指定する。
-    // FFmpegでは -metadata key= とすることで、そのタグを削除できる。
-    // そのため、元タグを読み込んだ後にユーザーが空欄へ変更した項目は
-    // 出力MP3では引き継がれない。
-    for(const [key,val] of fields){
-      const v=String(val ?? "").trim();
-      args.push("-metadata", `${key}=${v}`);
-    }
-    return args;
+
+  if(
+    !matches.length
+  ){
+
+    throw new Error(
+      "ラウドネス解析結果を取得できませんでした。"
+    );
   }
 
-  convertBtn.addEventListener("click", async ()=>{
-    if(!inputFile) return;
-    convertBtn.disabled=true;
-    download.hidden=true; download.style.display="none";
-    logs=[];
-    logEl.textContent="";
-    if(resultURL){URL.revokeObjectURL(resultURL);resultURL=null}
 
-    const ext=(inputFile.name.split(".").pop()||"bin").replace(/[^a-z0-9]/gi,"").toLowerCase() || "bin";
-    const inName=`input.${ext}`;
-    const outputBase=cleanOutputBaseName(outnameEl.value);
-    const outputFormat=formatEl.value;
-    const outName=outputFormat==="ogg" ? "normalized.ogg" : "normalized.mp3";
+  return JSON.parse(
+    matches[
+      matches.length - 1
+    ][0]
+  );
+}
+
+
+function safeNum(
+  v,
+  name
+){
+
+  const n =
+    Number(v);
+
+
+  if(
+    !Number.isFinite(n)
+  ){
+
+    throw new Error(
+      `${name} の解析値が不正です。`
+    );
+  }
+
+
+  return n;
+}
+
+
+/* =========================================================
+   ファイル名
+========================================================= */
+
+function cleanOutputBaseName(
+  name
+){
+
+  let v =
+    String(
+      name || ""
+    )
+    .trim()
+    .replace(
+      /\.(mp3|ogg)$/i,
+      ""
+    );
+
+
+  v =
+    v.replace(
+      /[\\/:*?"<>|]/g,
+      "_"
+    );
+
+
+  return (
+    v ||
+    "normalized"
+  );
+}
+
+
+/* =========================================================
+   FFmpegへ通常タグを渡す
+
+   MP3:
+     commentはここでは渡さない。
+     後でCOMMフレームとして直接追加。
+
+   OGG:
+     commentもFFmpegへ渡す。
+========================================================= */
+
+function addMetadataArgs(
+  args,
+  includeComment = true
+){
+
+  const fields = [
+
+    [
+      "title",
+      titleEl.value
+    ],
+
+    [
+      "artist",
+      artistEl.value
+    ],
+
+    [
+      "album",
+      albumEl.value
+    ],
+
+    [
+      "album_artist",
+      albumArtistEl.value
+    ],
+
+    [
+      "genre",
+      genreEl.value
+    ],
+
+    [
+      "date",
+      yearEl.value
+    ],
+
+    [
+      "track",
+      trackEl.value
+    ]
+  ];
+
+
+  if(
+    includeComment
+  ){
+
+    fields.push([
+      "comment",
+      commentEl.value
+    ]);
+  }
+
+
+  for(
+    const [
+      key,
+      val
+    ]
+    of fields
+  ){
+
+    const v =
+      String(
+        val ?? ""
+      ).trim();
+
+
+    args.push(
+      "-metadata",
+      `${key}=${v}`
+    );
+  }
+
+
+  return args;
+}
+
+
+/* =========================================================
+   ID3用 Syncsafe Integer
+========================================================= */
+
+function syncSafeEncode(
+  n
+){
+
+  return new Uint8Array([
+
+    (n >> 21)
+    &
+    0x7f,
+
+    (n >> 14)
+    &
+    0x7f,
+
+    (n >> 7)
+    &
+    0x7f,
+
+    n
+    &
+    0x7f
+  ]);
+}
+
+
+function readSyncSafe(
+  bytes,
+  offset
+){
+
+  return (
+    (
+      bytes[offset]
+      &
+      0x7f
+    )
+    <<
+    21
+  )
+  |
+  (
+    (
+      bytes[offset + 1]
+      &
+      0x7f
+    )
+    <<
+    14
+  )
+  |
+  (
+    (
+      bytes[offset + 2]
+      &
+      0x7f
+    )
+    <<
+    7
+  )
+  |
+  (
+    bytes[offset + 3]
+    &
+    0x7f
+  );
+}
+
+
+/* =========================================================
+   UTF-16LE + BOM
+========================================================= */
+
+function utf16leWithBom(
+  text
+){
+
+  const source =
+    String(
+      text ?? ""
+    );
+
+
+  const out =
+    new Uint8Array(
+      2 +
+      source.length * 2
+    );
+
+
+  /*
+    UTF-16 Little Endian BOM
+
+    FF FE
+  */
+
+  out[0] =
+    0xff;
+
+  out[1] =
+    0xfe;
+
+
+  let p =
+    2;
+
+
+  for(
+    let i = 0;
+    i < source.length;
+    i++
+  ){
+
+    const c =
+      source.charCodeAt(i);
+
+
+    out[p++] =
+      c
+      &
+      0xff;
+
+
+    out[p++] =
+      (
+        c >>
+        8
+      )
+      &
+      0xff;
+  }
+
+
+  return out;
+}
+
+
+/* =========================================================
+   ID3v2.3 COMMフレーム生成
+
+   構造:
+
+   COMM
+   ↓
+   Text encoding
+   Language
+   Description
+   Comment text
+========================================================= */
+
+function makeCOMMFrame(
+  comment
+){
+
+  const commentText =
+    utf16leWithBom(
+      comment
+    );
+
+
+  /*
+    Payload:
+
+    1 byte
+      Encoding = 01
+      UTF-16
+
+    3 bytes
+      language = eng
+
+    Description:
+      FF FE
+      00 00
+
+    Comment:
+      FF FE + UTF-16LE
+  */
+
+  const payload =
+    new Uint8Array(
+
+      1
+      +
+      3
+      +
+      4
+      +
+      commentText.length
+    );
+
+
+  let p =
+    0;
+
+
+  /*
+    Encoding = UTF-16
+  */
+
+  payload[p++] =
+    0x01;
+
+
+  /*
+    Language = eng
+  */
+
+  payload[p++] =
+    0x65;
+
+  payload[p++] =
+    0x6e;
+
+  payload[p++] =
+    0x67;
+
+
+  /*
+    空のDescription
+
+    BOM
+  */
+
+  payload[p++] =
+    0xff;
+
+  payload[p++] =
+    0xfe;
+
+
+  /*
+    UTF-16 NULL
+  */
+
+  payload[p++] =
+    0x00;
+
+  payload[p++] =
+    0x00;
+
+
+  /*
+    Comment本文
+  */
+
+  payload.set(
+    commentText,
+    p
+  );
+
+
+  /*
+    ID3v2.3 frame header
+
+    10 bytes
+  */
+
+  const frame =
+    new Uint8Array(
+      10 +
+      payload.length
+    );
+
+
+  /*
+    COMM
+  */
+
+  frame[0] =
+    0x43;
+
+  frame[1] =
+    0x4f;
+
+  frame[2] =
+    0x4d;
+
+  frame[3] =
+    0x4d;
+
+
+  /*
+    ID3v2.3のフレームサイズは
+    普通のBig Endian uint32
+  */
+
+  const size =
+    payload.length;
+
+
+  frame[4] =
+    (
+      size >>>
+      24
+    )
+    &
+    0xff;
+
+
+  frame[5] =
+    (
+      size >>>
+      16
+    )
+    &
+    0xff;
+
+
+  frame[6] =
+    (
+      size >>>
+      8
+    )
+    &
+    0xff;
+
+
+  frame[7] =
+    size
+    &
+    0xff;
+
+
+  /*
+    Frame flags
+  */
+
+  frame[8] =
+    0x00;
+
+  frame[9] =
+    0x00;
+
+
+  frame.set(
+    payload,
+    10
+  );
+
+
+  return frame;
+}
+
+
+/* =========================================================
+   FFmpeg生成MP3へCOMMを追加
+
+   既存COMMは削除してから
+   新しいCOMMを追加する。
+========================================================= */
+
+function addID3Comment(
+  mp3Bytes,
+  comment
+){
+
+  const input =
+    mp3Bytes
+    instanceof Uint8Array
+
+    ? mp3Bytes
+
+    : new Uint8Array(
+        mp3Bytes
+      );
+
+
+  const value =
+    String(
+      comment ?? ""
+    ).trim();
+
+
+  /*
+    ID3ヘッダー確認
+  */
+
+  if(
+    input.length < 10
+    ||
+    input[0] !== 0x49
+    ||
+    input[1] !== 0x44
+    ||
+    input[2] !== 0x33
+  ){
+
+    console.warn(
+      "ID3v2ヘッダーがありません。COMM追加をスキップします。"
+    );
+
+    return input;
+  }
+
+
+  const versionMajor =
+    input[3];
+
+
+  /*
+    FFmpeg側では
+    -id3v2_version 3
+    を指定しているので
+    通常ここは3になる。
+  */
+
+  if(
+    versionMajor !== 3
+  ){
+
+    console.warn(
+      `ID3v2.${versionMajor} が検出されました。`
+    );
+  }
+
+
+  /*
+    ID3タグ全体サイズ
+    ヘッダー10byteは含まれない
+  */
+
+  const oldTagSize =
+    readSyncSafe(
+      input,
+      6
+    );
+
+
+  const oldTagEnd =
+    Math.min(
+      input.length,
+      10 +
+      oldTagSize
+    );
+
+
+  /*
+    既存フレームを読み取る。
+
+    FFmpeg生成直後のID3v2.3を
+    対象としている。
+  */
+
+  const frames =
+    [];
+
+
+  let pos =
+    10;
+
+
+  while(
+    pos + 10
+    <=
+    oldTagEnd
+  ){
+
+    /*
+      Paddingなら終了
+    */
+
+    if(
+      input[pos] === 0
+      &&
+      input[pos + 1] === 0
+      &&
+      input[pos + 2] === 0
+      &&
+      input[pos + 3] === 0
+    ){
+      break;
+    }
+
+
+    const id =
+      String.fromCharCode(
+        input[pos],
+        input[pos + 1],
+        input[pos + 2],
+        input[pos + 3]
+      );
+
+
+    /*
+      ID3v2.3 frame size
+      Big Endian
+    */
+
+    const frameSize =
+      (
+        (
+          input[pos + 4]
+          <<
+          24
+        )
+        |
+        (
+          input[pos + 5]
+          <<
+          16
+        )
+        |
+        (
+          input[pos + 6]
+          <<
+          8
+        )
+        |
+        input[pos + 7]
+      )
+      >>>
+      0;
+
+
+    if(
+      frameSize <= 0
+      ||
+      pos
+      +
+      10
+      +
+      frameSize
+      >
+      oldTagEnd
+    ){
+
+      console.warn(
+        "ID3フレームの解析を途中で終了しました。",
+        id,
+        frameSize
+      );
+
+      break;
+    }
+
+
+    /*
+      既存COMMは保持しない。
+
+      それ以外はそのままコピー。
+    */
+
+    if(
+      id !== "COMM"
+    ){
+
+      frames.push(
+
+        input.slice(
+          pos,
+          pos
+          +
+          10
+          +
+          frameSize
+        )
+      );
+    }
+
+
+    pos +=
+      10 +
+      frameSize;
+  }
+
+
+  /*
+    コメントが空欄なら
+    COMMを作らない。
+
+    つまりコメント削除。
+  */
+
+  if(
+    value
+  ){
+
+    frames.push(
+      makeCOMMFrame(
+        value
+      )
+    );
+  }
+
+
+  /*
+    新しいタグサイズ
+  */
+
+  const framesLength =
+    frames.reduce(
+
+      (
+        total,
+        frame
+      ) =>
+
+        total
+        +
+        frame.length,
+
+      0
+    );
+
+
+  /*
+    新しいID3ヘッダー
+  */
+
+  const header =
+    new Uint8Array(
+      10
+    );
+
+
+  /*
+    ID3
+  */
+
+  header[0] =
+    0x49;
+
+  header[1] =
+    0x44;
+
+  header[2] =
+    0x33;
+
+
+  /*
+    ID3v2.3.0
+  */
+
+  header[3] =
+    0x03;
+
+  header[4] =
+    0x00;
+
+
+  /*
+    flags = 0
+
+    unsynchronisationなし
+    extended headerなし
+    experimentalなし
+  */
+
+  header[5] =
+    0x00;
+
+
+  header.set(
+    syncSafeEncode(
+      framesLength
+    ),
+    6
+  );
+
+
+  /*
+    元MP3の音声部分
+  */
+
+  const audio =
+    input.slice(
+      oldTagEnd
+    );
+
+
+  /*
+    新しいファイル
+  */
+
+  const result =
+    new Uint8Array(
+
+      10
+      +
+      framesLength
+      +
+      audio.length
+    );
+
+
+  let outPos =
+    0;
+
+
+  result.set(
+    header,
+    outPos
+  );
+
+
+  outPos +=
+    header.length;
+
+
+  for(
+    const frame of frames
+  ){
+
+    result.set(
+      frame,
+      outPos
+    );
+
+
+    outPos +=
+      frame.length;
+  }
+
+
+  result.set(
+    audio,
+    outPos
+  );
+
+
+  return result;
+}
+
+
+/* =========================================================
+   変換ボタン
+========================================================= */
+
+convertBtn.addEventListener(
+  "click",
+
+  async () => {
+
+    if(
+      !inputFile
+    ){
+      return;
+    }
+
+
+    convertBtn.disabled =
+      true;
+
+
+    download.hidden =
+      true;
+
+
+    download.style.display =
+      "none";
+
+
+    logs =
+      [];
+
+
+    logEl.textContent =
+      "";
+
+
+    if(
+      resultURL
+    ){
+
+      URL.revokeObjectURL(
+        resultURL
+      );
+
+      resultURL =
+        null;
+    }
+
+
+    const ext =
+      (
+        inputFile.name
+        .split(".")
+        .pop()
+        ||
+        "bin"
+      )
+      .replace(
+        /[^a-z0-9]/gi,
+        ""
+      )
+      .toLowerCase()
+      ||
+      "bin";
+
+
+    const inName =
+      `input.${ext}`;
+
+
+    const outputBase =
+      cleanOutputBaseName(
+        outnameEl.value
+      );
+
+
+    const outputFormat =
+      formatEl.value;
+
+
+    const outName =
+      outputFormat === "ogg"
+
+      ? "normalized.ogg"
+
+      : "normalized.mp3";
+
 
     try{
-      await loadFFmpeg();
-      setStatus("ファイルを読み込んでいます…");
-      progress.value=14;
-      await ffmpeg.writeFile(inName, new Uint8Array(await inputFile.arrayBuffer()));
 
-      // PASS 1: measure loudness
-      progress.dataset.stage="analyze";
-      setStatus("1/2 ラウドネスを解析しています…");
-      logs=[];
+      /*
+        FFmpegロード
+      */
+
+      await loadFFmpeg();
+
+
+      setStatus(
+        "ファイルを読み込んでいます…"
+      );
+
+
+      progress.value =
+        14;
+
+
+      await ffmpeg.writeFile(
+
+        inName,
+
+        new Uint8Array(
+          await inputFile.arrayBuffer()
+        )
+      );
+
+
+      /* ================================================
+         PASS 1
+         Loudness解析
+      ================================================= */
+
+      progress.dataset.stage =
+        "analyze";
+
+
+      setStatus(
+        "1/2 ラウドネスを解析しています…"
+      );
+
+
+      logs =
+        [];
+
+
       await ffmpeg.exec([
-        "-hide_banner","-i",inName,
+
+        "-hide_banner",
+
+        "-i",
+        inName,
+
         "-vn",
-        "-af","loudnorm=I=-14:TP=-1.5:LRA=11:print_format=json",
-        "-f","null","-"
+
+        "-af",
+        "loudnorm=I=-14:TP=-1.5:LRA=11:print_format=json",
+
+        "-f",
+        "null",
+
+        "-"
       ]);
 
-      const measured=parseLoudnormJSON(logs.join("\n"));
-      const input_i=safeNum(measured.input_i,"input_i");
-      const input_tp=safeNum(measured.input_tp,"input_tp");
-      const input_lra=safeNum(measured.input_lra,"input_lra");
-      const input_thresh=safeNum(measured.input_thresh,"input_thresh");
-      const target_offset=safeNum(measured.target_offset,"target_offset");
 
-      // PASS 2: normalize with measured values, encode MP3
-      progress.dataset.stage="encode";
-      progress.value=50;
-      setStatus("2/2 -14 LUFSへ補正してMP3を書き出しています…");
+      const measured =
+        parseLoudnormJSON(
+          logs.join("\n")
+        );
 
-      const filter=[
+
+      const input_i =
+        safeNum(
+          measured.input_i,
+          "input_i"
+        );
+
+
+      const input_tp =
+        safeNum(
+          measured.input_tp,
+          "input_tp"
+        );
+
+
+      const input_lra =
+        safeNum(
+          measured.input_lra,
+          "input_lra"
+        );
+
+
+      const input_thresh =
+        safeNum(
+          measured.input_thresh,
+          "input_thresh"
+        );
+
+
+      const target_offset =
+        safeNum(
+          measured.target_offset,
+          "target_offset"
+        );
+
+
+      /* ================================================
+         PASS 2
+         Loudness補正 + Encode
+      ================================================= */
+
+      progress.dataset.stage =
+        "encode";
+
+
+      progress.value =
+        50;
+
+
+      setStatus(
+        outputFormat === "ogg"
+
+        ? "2/2 -14 LUFSへ補正してOGGを書き出しています…"
+
+        : "2/2 -14 LUFSへ補正してMP3を書き出しています…"
+      );
+
+
+      const filter = [
+
         "loudnorm=I=-14",
+
         "TP=-1.5",
+
         "LRA=11",
+
         `measured_I=${input_i}`,
+
         `measured_TP=${input_tp}`,
+
         `measured_LRA=${input_lra}`,
+
         `measured_thresh=${input_thresh}`,
+
         `offset=${target_offset}`,
+
         "linear=true",
+
         "print_format=summary"
+
       ].join(":");
 
-      const encodeArgs=[
-        "-hide_banner","-y","-i",inName,
+
+      /*
+        元ファイルのタグを
+        無条件コピーしない。
+
+        フォームで指定したタグだけを
+        新しく書く。
+      */
+
+      const encodeArgs = [
+
+        "-hide_banner",
+
+        "-y",
+
+        "-i",
+        inName,
+
         "-vn",
-        "-af",filter
+
+        "-map_metadata",
+        "-1",
+
+        "-af",
+        filter
       ];
 
-      if(outputFormat==="ogg"){
+
+      if(
+        outputFormat === "ogg"
+      ){
+
         encodeArgs.push(
-          "-c:a","libvorbis",
-          "-q:a",oggQualityEl.value,
-          "-ar","44100"
+
+          "-c:a",
+          "libvorbis",
+
+          "-q:a",
+          oggQualityEl.value,
+
+          "-ar",
+          "44100"
         );
+
       }else{
+
         encodeArgs.push(
-          "-c:a","libmp3lame",
-          "-b:a",bitrateEl.value,
-          "-ar","44100",
-          "-id3v2_version","3"
+
+          "-c:a",
+          "libmp3lame",
+
+          "-b:a",
+          bitrateEl.value,
+
+          "-ar",
+          "44100",
+
+          "-id3v2_version",
+          "3"
         );
       }
 
-      addMetadataArgs(encodeArgs);
-      encodeArgs.push(outName);
-      await ffmpeg.exec(encodeArgs);
 
-      const data=await ffmpeg.readFile(outName);
-      const blob=new Blob([data.buffer],{
-        type: outputFormat==="ogg" ? "audio/ogg" : "audio/mpeg"
-      });
-      resultURL=URL.createObjectURL(blob);
+      /*
+        OGGではcommentもFFmpegへ渡す。
 
-      download.href=resultURL;
-      download.download=`${outputBase}.${outputFormat==="ogg" ? "ogg" : "mp3"}`;
-      download.hidden=false; download.style.display="block";
+        MP3ではcommentを渡さず、
+        後からCOMMフレームを作る。
+      */
 
-      progress.value=100;
-      const qualityText = outputFormat==="ogg"
-        ? `${oggQualityEl.options[oggQualityEl.selectedIndex].text} OGG Vorbis`
-        : `${bitrateEl.options[bitrateEl.selectedIndex].text} MP3`;
-      setStatus(`完了：-14 LUFS / -1.5 dBTP / ${qualityText}`, "ok");
+      addMetadataArgs(
 
-      // cleanup wasm FS
-      try{await ffmpeg.deleteFile(inName)}catch{}
-      try{await ffmpeg.deleteFile(outName)}catch{}
+        encodeArgs,
+
+        outputFormat
+        !==
+        "mp3"
+      );
+
+
+      encodeArgs.push(
+        outName
+      );
+
+
+      await ffmpeg.exec(
+        encodeArgs
+      );
+
+
+      /* ================================================
+         出力ファイル読込
+      ================================================= */
+
+      let data =
+        await ffmpeg.readFile(
+          outName
+        );
+
+
+      /*
+        MP3だけCOMMを直接追加
+      */
+
+      if(
+        outputFormat === "mp3"
+      ){
+
+        setStatus(
+          "MP3へ標準COMMコメントを書き込んでいます…"
+        );
+
+
+        data =
+          addID3Comment(
+
+            data,
+
+            commentEl.value
+          );
+      }
+
+
+      /* ================================================
+         Blob生成
+      ================================================= */
+
+      const blob =
+        new Blob(
+
+          [
+            data
+          ],
+
+          {
+            type:
+              outputFormat === "ogg"
+
+              ? "audio/ogg"
+
+              : "audio/mpeg"
+          }
+        );
+
+
+      resultURL =
+        URL.createObjectURL(
+          blob
+        );
+
+
+      /* ================================================
+         Download
+      ================================================= */
+
+      download.href =
+        resultURL;
+
+
+      download.download =
+        `${outputBase}.${
+          outputFormat === "ogg"
+          ? "ogg"
+          : "mp3"
+        }`;
+
+
+      download.hidden =
+        false;
+
+
+      download.style.display =
+        "block";
+
+
+      progress.value =
+        100;
+
+
+      const qualityText =
+        outputFormat === "ogg"
+
+        ? `${oggQualityEl.options[
+            oggQualityEl.selectedIndex
+          ].text} OGG Vorbis`
+
+        : `${bitrateEl.options[
+            bitrateEl.selectedIndex
+          ].text} MP3`;
+
+
+      setStatus(
+
+        `完了：-14 LUFS / -1.5 dBTP / ${qualityText}`,
+
+        "ok"
+      );
+
+
+      /* ================================================
+         WASM FS cleanup
+      ================================================= */
+
+      try{
+        await ffmpeg.deleteFile(
+          inName
+        );
+      }catch{}
+
+
+      try{
+        await ffmpeg.deleteFile(
+          outName
+        );
+      }catch{}
+
+
     }catch(err){
-      console.error(err);
-      setStatus(`エラー：${err?.message || err}`, "err");
-      progress.value=0;
+
+      console.error(
+        err
+      );
+
+
+      setStatus(
+        `エラー：${err?.message || err}`,
+        "err"
+      );
+
+
+      progress.value =
+        0;
+
+
     }finally{
-      progress.dataset.stage="";
-      convertBtn.disabled=false;
+
+      progress.dataset.stage =
+        "";
+
+
+      convertBtn.disabled =
+        false;
     }
-  });
+  }
+);
+
 </script>
+
 </body>
 </html>
